@@ -1,0 +1,915 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="description" content="A note-taking app for video lessons: timestamped notes, pause reminders, easy reordering, summaries and a flashcard quiz.">
+<style>:root{color-scheme:light;padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom)}body{margin:0;font-family:system-ui,sans-serif;font-size:14px}img{max-width:100%}[hidden]{display:none!important}</style>
+</head>
+<body>
+<title>Scribble</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Recursive:wght,CASL,MONO@300..900,0..1,0..1&display=swap">
+<style>
+/* Layout: one narrow notebook column. Sticky header + tabs on top; in "Take notes" the composer is pinned to the bottom so typing never needs scrolling. Timestamps sit in the sheet's left margin, like a Cornell cue column. */
+:root{
+  --paper:#EDF1F7;
+  --sheet:#FFFFFF;
+  --ink:#13203B;
+  --muted:#56637F;
+  --rule:#D6DEEB;
+  --margin:#EBB7BF;
+  --accent:#2747C7;
+  --accent-ink:#FFFFFF;
+  --accent-soft:#E3E8FA;
+  --hi:#FFE14D;
+  --hi-ink:#2E2600;
+  --t-key:#2747C7;
+  --t-def:#12805A;
+  --t-ex:#7446BE;
+  --t-q:#B65310;
+  --t-rewatch:#B32340;
+  --t-test:#7A5E00;
+  --ok:#12805A;
+  --danger:#B32340;
+  --shadow:0 1px 2px rgba(19,32,59,.07),0 8px 24px rgba(19,32,59,.06);
+
+  --f-display:"Recursive",ui-rounded,system-ui,sans-serif;
+  --f-body:"Atkinson Hyperlegible",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --f-mono:"Recursive",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+
+  --s1:4px;--s2:8px;--s3:12px;--s4:16px;--s5:24px;--s6:32px;
+  --r:10px;
+  --maxw:720px;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --paper:#0D1424;--sheet:#152038;--ink:#E7ECF6;--muted:#9CA9C5;--rule:#26345A;--margin:#5A3442;
+  --accent:#8AA2FF;--accent-ink:#0D1424;--accent-soft:#1E2C52;--hi:#F2D33D;--hi-ink:#231C00;
+  --t-key:#8AA2FF;--t-def:#4FD19B;--t-ex:#C4A1FF;--t-q:#FFA866;--t-rewatch:#FF7F98;--t-test:#F2D33D;
+  --ok:#4FD19B;--danger:#FF7F98;--shadow:0 1px 2px rgba(0,0,0,.3),0 8px 24px rgba(0,0,0,.25);
+  color-scheme:dark;
+}}
+:root[data-theme="dark"]{
+  --paper:#0D1424;--sheet:#152038;--ink:#E7ECF6;--muted:#9CA9C5;--rule:#26345A;--margin:#5A3442;
+  --accent:#8AA2FF;--accent-ink:#0D1424;--accent-soft:#1E2C52;--hi:#F2D33D;--hi-ink:#231C00;
+  --t-key:#8AA2FF;--t-def:#4FD19B;--t-ex:#C4A1FF;--t-q:#FFA866;--t-rewatch:#FF7F98;--t-test:#F2D33D;
+  --ok:#4FD19B;--danger:#FF7F98;--shadow:0 1px 2px rgba(0,0,0,.3),0 8px 24px rgba(0,0,0,.25);
+  color-scheme:dark;
+}
+
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{background:var(--paper)}
+body{color:var(--ink);font-family:var(--f-body);font-size:16px;line-height:1.5;-webkit-text-size-adjust:100%}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--paper)}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+
+.wrap{max-width:var(--maxw);margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+
+/* Header */
+.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--paper);border-bottom:1px solid var(--rule)}
+.top .wrap{display:flex;align-items:center;gap:var(--s3);padding-block:var(--s3)}
+.brand{font-family:var(--f-display);font-variation-settings:"CASL" 1;font-weight:800;font-size:1.5rem;letter-spacing:-.01em;line-height:1;display:flex;align-items:center;gap:var(--s2)}
+.brand-mark{width:26px;height:26px;border-radius:7px;background:var(--hi);color:var(--hi-ink);display:grid;place-items:center;font-size:.95rem;transform:rotate(-6deg)}
+.back{border:0;background:none;padding:6px 8px 6px 0;color:var(--accent);font-weight:700;display:flex;align-items:center;gap:4px;white-space:nowrap}
+.top-title{min-width:0;flex:1}
+.top-title .eyebrow{font-size:.72rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.top-title h1{margin:0;font-family:var(--f-display);font-variation-settings:"CASL" .6;font-weight:750;font-size:1.05rem;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sync{font-size:.75rem;color:var(--muted);white-space:nowrap}
+.sync.err{color:var(--danger)}
+
+.tabs{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;padding-block:0 var(--s2)}
+.tab{border:0;background:none;padding:8px 2px;border-radius:8px;font-weight:700;font-size:.84rem;white-space:nowrap;min-width:0;color:var(--muted);display:flex;flex-direction:column;align-items:center;gap:2px}
+.tab small{font-family:var(--f-mono);font-variation-settings:"MONO" 1;font-weight:500;font-size:.7rem;color:var(--muted)}
+.tab[aria-selected="true"]{background:var(--sheet);color:var(--ink);box-shadow:var(--shadow)}
+
+main.wrap{padding-block:var(--s4) var(--s6)}
+
+/* Generic */
+.btn{border:1px solid var(--rule);background:var(--sheet);border-radius:999px;padding:9px 16px;font-weight:700;font-size:.92rem;display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:42px;transition:transform .08s}
+.btn:active{transform:scale(.97)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.hi{background:var(--hi);border-color:var(--hi);color:var(--hi-ink)}
+.btn.ghost{background:none;border-color:transparent}
+.btn.warn{color:var(--t-rewatch)}
+.btn.danger{color:var(--danger);border-color:var(--danger);background:none}
+.btn.small{min-height:34px;padding:6px 12px;font-size:.85rem}
+.btn[disabled]{opacity:.45;pointer-events:none}
+.card{background:var(--sheet);border-radius:14px;box-shadow:var(--shadow);padding:var(--s4)}
+.stack{display:flex;flex-direction:column;gap:var(--s4)}
+.row-wrap{display:flex;flex-wrap:wrap;gap:var(--s2);align-items:center}
+.muted{color:var(--muted)}
+.label{font-size:.72rem;text-transform:uppercase;letter-spacing:.09em;font-weight:700;color:var(--muted);margin:0 0 var(--s2)}
+h2.h{font-family:var(--f-display);font-variation-settings:"CASL" .8;font-weight:800;font-size:1.3rem;margin:0;text-wrap:balance;letter-spacing:-.01em}
+h3.h{font-family:var(--f-display);font-variation-settings:"CASL" .5;font-weight:750;font-size:1.05rem;margin:0}
+.mono{font-family:var(--f-mono);font-variation-settings:"MONO" 1;font-variant-numeric:tabular-nums}
+input.field,textarea.field,select.field{width:100%;border:1px solid var(--rule);background:var(--sheet);border-radius:var(--r);padding:10px 12px}
+textarea.field{resize:vertical;line-height:1.5}
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--paper);padding:10px 16px;border-radius:999px;font-weight:700;font-size:.9rem;z-index:30;max-width:calc(100vw - 32px);text-align:center}
+
+/* Library */
+.hero{display:flex;flex-direction:column;gap:var(--s2);padding-block:var(--s2) var(--s2)}
+.hero h2{font-family:var(--f-display);font-variation-settings:"CASL" 1;font-weight:850;font-size:clamp(1.7rem,6vw,2.3rem);line-height:1.08;margin:0;letter-spacing:-.02em;text-wrap:balance}
+.hero h2 mark{background:linear-gradient(transparent 55%,var(--hi) 55%,var(--hi) 92%,transparent 92%);color:inherit;padding:0 2px}
+.hero p{margin:0;color:var(--muted);max-width:52ch}
+.lesson-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:var(--s3)}
+.lesson{display:block;width:100%;text-align:left;border:0;padding:var(--s4)}
+.lesson .eyebrow{font-size:.72rem;text-transform:uppercase;letter-spacing:.08em;color:var(--accent);font-weight:700}
+.lesson .title{font-family:var(--f-display);font-variation-settings:"CASL" .5;font-weight:750;font-size:1.1rem;margin:2px 0 6px;line-height:1.3}
+.stats{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:.84rem;color:var(--muted)}
+.stats b{color:var(--ink);font-variant-numeric:tabular-nums}
+.routine ol{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:var(--s3);counter-reset:r}
+.routine li{display:grid;grid-template-columns:28px 1fr;gap:var(--s3);counter-increment:r}
+.routine li::before{content:counter(r);width:26px;height:26px;border-radius:50%;background:var(--accent-soft);color:var(--accent);font-weight:800;display:grid;place-items:center;font-size:.85rem;font-family:var(--f-mono);font-variation-settings:"MONO" 1}
+.routine li p{margin:0;font-size:.95rem}
+.routine li b{display:block}
+.newform{display:grid;gap:var(--s3)}
+.empty{text-align:center;padding:var(--s6) var(--s4)}
+.empty p{margin:var(--s2) auto var(--s4);max-width:40ch}
+
+/* Clock */
+.clock{display:flex;flex-direction:column;gap:var(--s3)}
+.clock-row{display:flex;align-items:center;justify-content:space-between;gap:var(--s3);flex-wrap:wrap}
+.clock-time{border:0;background:none;padding:0;font-family:var(--f-mono);font-variation-settings:"MONO" 1;font-weight:700;font-size:2.4rem;line-height:1;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.clock-time.running{color:var(--accent)}
+.clock-time-input{font-family:var(--f-mono);font-variation-settings:"MONO" 1;font-size:1.6rem;width:9ch;padding:4px 8px;border:1px solid var(--accent);border-radius:8px;background:var(--sheet)}
+.clock-lbl{font-size:.8rem;color:var(--muted)}
+.meter{height:6px;border-radius:99px;background:var(--rule);overflow:hidden}
+.meter span{display:block;height:100%;background:var(--hi);border-radius:99px;transition:width .4s linear}
+.clock-meta{display:flex;flex-wrap:wrap;gap:var(--s2) var(--s3);align-items:center;font-size:.86rem;color:var(--muted)}
+.clock-meta select{border:1px solid var(--rule);background:var(--sheet);border-radius:8px;padding:4px 8px}
+.nudge{background:var(--hi);color:var(--hi-ink);border-radius:14px;padding:var(--s3) var(--s4);display:flex;gap:var(--s3);align-items:center;justify-content:space-between;font-weight:700;animation:pop .35s ease-out}
+.nudge .btn{background:var(--hi-ink);color:var(--hi);border-color:var(--hi-ink)}
+@keyframes pop{from{transform:scale(.96);opacity:.6}to{transform:none;opacity:1}}
+
+/* Notebook sheet */
+.sheet{background:var(--sheet);border-radius:14px;box-shadow:var(--shadow);overflow:hidden;position:relative}
+.sheet::before{content:"";position:absolute;top:0;bottom:0;left:58px;width:1.5px;background:var(--margin)}
+.notes{list-style:none;margin:0;padding:var(--s2) 0}
+.note{display:grid;grid-template-columns:58px 1fr;align-items:baseline;min-height:40px;border-bottom:1px solid var(--rule);position:relative}
+.note:last-child{border-bottom:0}
+.note .ts{font-family:var(--f-mono);font-variation-settings:"MONO" 1;font-size:.74rem;color:var(--muted);text-align:right;padding:10px 10px 0 0;font-variant-numeric:tabular-nums}
+.note .body{padding:8px 14px 8px 14px;min-width:0;overflow-wrap:anywhere}
+.note[data-level="1"] .body{padding-left:34px}
+.note[data-level="2"] .body{padding-left:54px}
+.note[data-level="1"] .body::before,.note[data-level="2"] .body::before{content:"";position:absolute;margin-left:-14px;margin-top:.62em;width:5px;height:5px;border-radius:50%;background:var(--muted)}
+.note.section .body{font-family:var(--f-display);font-variation-settings:"CASL" .7;font-weight:800;font-size:1.05rem;padding-top:14px;padding-bottom:6px}
+.note.section{border-bottom:2px solid var(--ink)}
+.txt{white-space:pre-wrap}
+.note.test .txt{background:linear-gradient(transparent 40%,color-mix(in srgb,var(--hi) 75%,transparent) 40%);box-decoration-break:clone;-webkit-box-decoration-break:clone;padding:0 2px}
+.tag{display:inline-block;font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;border-radius:5px;padding:1px 6px;margin-right:6px;vertical-align:2px;border:1px solid currentColor}
+.tag.key{color:var(--t-key)}.tag.def{color:var(--t-def)}.tag.ex{color:var(--t-ex)}.tag.q{color:var(--t-q)}.tag.rewatch{color:var(--t-rewatch)}.tag.test{color:var(--t-test)}
+.more-link{display:block;text-align:center;padding:10px;font-size:.88rem;color:var(--accent);background:none;border:0;width:100%;border-bottom:1px solid var(--rule);font-weight:700}
+.sheet-empty{padding:var(--s5) var(--s4) var(--s5) 74px;color:var(--muted)}
+
+/* Composer */
+.composer{position:sticky;bottom:0;z-index:4;margin-top:var(--s4);background:var(--paper);padding-block:var(--s3) calc(var(--s3) + env(safe-area-inset-bottom,0px));border-top:1px solid var(--rule)}
+.chips{display:flex;gap:6px;overflow-x:auto;padding-bottom:var(--s2);scrollbar-width:none}
+.chips::-webkit-scrollbar{display:none}
+.chip{flex:none;border:1px solid var(--rule);background:var(--sheet);border-radius:999px;padding:5px 12px;font-size:.84rem;font-weight:700;color:var(--muted)}
+.chip[aria-pressed="true"]{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+.chip.test[aria-pressed="true"]{background:var(--hi);color:var(--hi-ink);border-color:var(--hi)}
+.comp-row{display:flex;gap:var(--s2);align-items:flex-end}
+.comp-row textarea{flex:1;min-width:0;border:1.5px solid var(--rule);background:var(--sheet);border-radius:14px;padding:10px 14px;resize:none;max-height:40vh;line-height:1.45}
+.comp-row textarea:focus{border-color:var(--accent);outline:none}
+.comp-foot{display:flex;justify-content:space-between;align-items:center;gap:var(--s2);flex-wrap:wrap;margin-top:var(--s2)}
+.hint{font-size:.76rem;color:var(--muted)}
+.hint code{font-family:var(--f-mono);font-variation-settings:"MONO" 1;background:var(--sheet);border:1px solid var(--rule);border-radius:4px;padding:0 4px}
+
+/* Organize */
+.filters{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none}
+.filters::-webkit-scrollbar{display:none}
+.org .note{cursor:pointer}
+.org .note.sel{background:var(--accent-soft)}
+.org .note.sel::after{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--accent)}
+.editbox{grid-column:1/-1;padding:10px 14px 12px 70px;display:flex;flex-direction:column;gap:var(--s2)}
+.actionbar{position:fixed;left:0;right:0;bottom:0;z-index:8;background:var(--sheet);border-top:1px solid var(--rule);box-shadow:0 -8px 24px rgba(0,0,0,.08);padding-block:var(--s2) calc(var(--s2) + env(safe-area-inset-bottom,0px))}
+.actionbar .wrap{display:flex;flex-direction:column;gap:var(--s2)}
+.ab-row{display:flex;gap:4px;justify-content:space-between}
+.ab-btn{flex:1;border:0;background:none;border-radius:10px;padding:6px 2px;display:flex;flex-direction:column;align-items:center;gap:2px;font-size:.72rem;font-weight:700;color:var(--muted);min-width:0}
+.ab-btn svg{width:22px;height:22px;stroke:var(--ink);fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.ab-btn.del svg{stroke:var(--danger)}
+.ab-btn:active{background:var(--accent-soft)}
+.ab-btn[disabled]{opacity:.35}
+.pad-bottom{height:140px}
+
+/* Summary */
+.kp-sec{margin:0 0 var(--s3)}
+.kp-sec h4{margin:0 0 4px;font-family:var(--f-display);font-variation-settings:"CASL" .6;font-weight:750;font-size:.98rem}
+.kp-sec ul,.ai ul{margin:0;padding-left:1.2em;display:flex;flex-direction:column;gap:4px}
+.ai .terms{display:grid;grid-template-columns:minmax(0,max-content) 1fr;gap:6px 14px;margin:0}
+.ai .terms dt{font-weight:700}
+.ai .terms dd{margin:0;min-width:0}
+.ai-stale{font-size:.84rem;color:var(--t-q);font-weight:700}
+.gaps li{color:var(--t-rewatch)}
+.thinking{display:flex;align-items:center;gap:var(--s3);color:var(--muted)}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--accent);animation:blink 1s infinite alternate}
+@keyframes blink{from{opacity:.25}to{opacity:1}}
+.ai-err{color:var(--danger);font-weight:700;margin:0}
+
+/* Quiz */
+.flash{min-height:220px;display:flex;flex-direction:column;justify-content:space-between;gap:var(--s4);border:0;width:100%;text-align:left;position:relative}
+.flash .src{font-size:.72rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:700}
+.flash .q{font-family:var(--f-display);font-variation-settings:"CASL" .4;font-weight:700;font-size:1.25rem;line-height:1.35;text-wrap:balance;white-space:pre-wrap}
+.flash .a{border-top:2px dashed var(--rule);padding-top:var(--s3);white-space:pre-wrap;font-size:1.02rem}
+.flash .tap{font-size:.84rem;color:var(--accent);font-weight:700}
+.progress{display:flex;justify-content:space-between;font-size:.86rem;color:var(--muted)}
+.score{display:flex;gap:var(--s4)}
+.score b{font-variant-numeric:tabular-nums}
+.got{color:var(--ok)}.miss{color:var(--danger)}
+
+.overlay{position:fixed;inset:0;z-index:40;background:rgba(0,0,0,.45);display:grid;place-items:center;padding:max(16px,env(safe-area-inset-left,0px))}
+.overlay .card{width:min(560px,100%);max-height:80vh;display:flex;flex-direction:column;gap:var(--s3)}
+.overlay textarea{flex:1;min-height:240px;font-family:var(--f-mono);font-variation-settings:"MONO" 1;font-size:.82rem}
+.confirm{display:flex;flex-wrap:wrap;gap:var(--s2);align-items:center}
+</style>
+
+<header class="top" id="top"></header>
+<main class="wrap" id="main"><p class="muted">Opening your notebook…</p></main>
+<div id="layer"></div>
+
+<script>
+(() => {
+"use strict";
+const $ = (s, r = document) => r.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const mkId = p => p + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+const pad = n => String(n).padStart(2, "0");
+const fmt = s => { s = Math.max(0, Math.floor(s || 0)); const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), x = s % 60; return h ? `${h}:${pad(m)}:${pad(x)}` : `${pad(m)}:${pad(x)}`; };
+const parseTime = str => { const p = String(str).trim().split(":").map(x => x.trim()); if (!p.length || p.some(x => x === "" || isNaN(+x))) return null; return p.map(Number).reduce((a, b) => a * 60 + b, 0); };
+const fmtDate = ms => new Date(ms).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+const clone = o => JSON.parse(JSON.stringify(o));
+const lsGet = k => { try { return localStorage.getItem(k); } catch { return null; } };
+const lsSet = (k, v) => { try { localStorage.setItem(k, v); } catch {} };
+
+const TAGS = {
+  key: { label: "Key idea", chip: "Key idea" },
+  def: { label: "Definition", chip: "Definition" },
+  ex: { label: "Example", chip: "Example" },
+  q: { label: "Question", chip: "Question" },
+  test: { label: "On the test", chip: "★ On the test" },
+  rewatch: { label: "Rewatch", chip: "⟲ Rewatch" },
+  section: { label: "Section", chip: "§ Section" }
+};
+const CHIP_ORDER = ["key", "def", "ex", "q", "test", "section"];
+const LS_KEY = "scribble.v1.lessons";
+
+const S = {
+  lessons: new Map(), view: "library", currentId: null, tab: "capture",
+  draft: "", draftTag: "", draftT: null,
+  selected: null, editingId: null, filter: "all", showAll: false,
+  newOpen: false, confirmDelete: false,
+  clock: { running: false, base: 0, startedAt: 0, lessonId: null },
+  nudgeMin: +(lsGet("scribble.nudge") ?? 5) || 0, lastNudgeAt: -1, nudgeOn: false,
+  editingTime: false,
+  aiBusy: false, aiErr: "", aiCtl: null,
+  quiz: null,
+  mode: "local", syncState: "", db: null, col: null, sample: null, downloads: null
+};
+
+/* ---------- storage ---------- */
+function normalize(l) {
+  l = clone(l);
+  return {
+    id: l.id, title: l.title || "Untitled lesson", course: l.course || "",
+    createdAt: l.createdAt || Date.now(), updatedAt: l.updatedAt || Date.now(),
+    elapsed: +l.elapsed || 0, mySummary: l.mySummary || "",
+    notes: Array.isArray(l.notes) ? l.notes.map(n => ({ id: n.id || mkId("n"), text: String(n.text ?? ""), tag: TAGS[n.tag] ? n.tag : "", level: Math.max(0, Math.min(2, +n.level || 0)), t: +n.t || 0 })) : [],
+    ai: l.ai && typeof l.ai === "object" ? l.ai : null,
+    example: !!l.example
+  };
+}
+function loadLocal() { try { (JSON.parse(lsGet(LS_KEY) || "[]") || []).forEach(l => l && l.id && S.lessons.set(l.id, normalize(l))); } catch {} }
+function saveLocal() { lsSet(LS_KEY, JSON.stringify([...S.lessons.values()])); }
+
+const timers = new Map(), writes = new Map();
+const isPending = id => timers.has(id) || !!writes.get(id)?.busy;
+function persist(l, touch = true) {
+  if (touch) l.updatedAt = Date.now();
+  saveLocal();
+  if (!S.col) return;
+  clearTimeout(timers.get(l.id));
+  timers.set(l.id, setTimeout(() => { timers.delete(l.id); flushRemote(l.id); }, 700));
+}
+async function flushRemote(id) {
+  const w = writes.get(id) || { busy: false, again: false }; writes.set(id, w);
+  if (w.busy) { w.again = true; return; }
+  const l = S.lessons.get(id); if (!l || !S.col) return;
+  w.busy = true;
+  try { await S.col.doc(id).set(clone(l)); setSync("ok"); }
+  catch (e) { setSync("err", e); }
+  w.busy = false;
+  if (w.again) { w.again = false; flushRemote(id); }
+}
+async function deleteLesson(id) {
+  S.lessons.delete(id); saveLocal();
+  clearTimeout(timers.get(id)); timers.delete(id);
+  if (S.col) { try { await S.col.doc(id).delete(); } catch (e) { setSync("err", e); } }
+}
+function setSync(state, e) {
+  S.syncState = state;
+  if (state === "err" && e && e.code === "quota_exceeded") toast("Storage is full. Delete an old lesson to keep saving.");
+  const el = $("#sync"); if (el) { el.textContent = syncLabel(); el.className = "sync" + (state === "err" ? " err" : ""); }
+}
+function syncLabel() {
+  if (S.syncState === "err") return "Not saved — retrying on next change";
+  return S.mode === "remote" ? "Saved to your account" : "Saved in this browser";
+}
+
+async function initCaps() {
+  const C = window.claude;
+  if (!C || typeof C.use !== "function") return;
+  const get = n => Promise.resolve().then(() => C.use(n)).catch(() => null);
+  const [user, db, sample, downloads] = await Promise.all([get("user"), get("db"), get("sample"), get("downloads")]);
+  S.sample = sample; S.downloads = downloads;
+  let uid = null;
+  try { uid = user ? await user.id() : null; } catch {}
+  if (db && uid) {
+    try {
+      S.db = db; S.col = db.collection("data/users/" + uid); S.mode = "remote";
+      let first = true;
+      S.col.onSnapshot(snap => {
+        const seen = new Set();
+        snap.docs.forEach(d => {
+          seen.add(d.id);
+          if (isPending(d.id)) return;
+          const data = d.data(); if (!data) return;
+          const loc = S.lessons.get(d.id);
+          if (loc && (loc.updatedAt || 0) > (data.updatedAt || 0)) return;
+          S.lessons.set(d.id, normalize({ ...data, id: d.id }));
+        });
+        if (first) { first = false; for (const id of S.lessons.keys()) if (!seen.has(id)) flushRemote(id); }
+        else for (const id of [...S.lessons.keys()]) if (!seen.has(id) && !isPending(id)) S.lessons.delete(id);
+        saveLocal(); if (S.syncState !== "err") setSync("ok");
+        softRender();
+      }, e => setSync("err", e));
+    } catch (e) { S.col = null; S.mode = "local"; }
+  }
+  softRender();
+}
+
+/* ---------- lessons ---------- */
+const cur = () => S.lessons.get(S.currentId);
+function newLesson(title, course) {
+  const l = normalize({ id: mkId("l"), title: title.trim() || "Untitled lesson", course: course.trim() });
+  S.lessons.set(l.id, l); persist(l); return l;
+}
+function exampleLesson() {
+  const N = (t, tag, level, text) => ({ id: mkId("n"), t, tag, level, text });
+  const l = normalize({
+    id: mkId("l"), title: "Cellular respiration", course: "Example · Biology 101", example: true, elapsed: 742,
+    notes: [
+      N(40, "section", 0, "What cellular respiration is"),
+      N(65, "def", 0, "Cellular respiration: how cells break down glucose to release energy as ATP"),
+      N(110, "key", 1, "Overall: glucose + oxygen → carbon dioxide + water + ATP"),
+      N(190, "test", 1, "Most of it happens in the mitochondria"),
+      N(270, "section", 0, "The three stages"),
+      N(285, "key", 1, "1. Glycolysis happens in the cytoplasm and splits glucose into 2 pyruvate"),
+      N(340, "ex", 2, "Doesn't need oxygen (anaerobic)"),
+      N(435, "key", 1, "2. Krebs cycle runs in the mitochondrial matrix"),
+      N(482, "rewatch", 1, "Missed what the Krebs cycle produces"),
+      N(570, "key", 1, "3. Electron transport chain makes most of the ATP (about 34)"),
+      N(605, "test", 2, "Oxygen is the final electron acceptor"),
+      N(680, "q", 0, "Why do muscles make lactic acid when oxygen runs low?"),
+      N(705, "ex", 1, "Fermentation lets glycolysis keep going without oxygen")
+    ]
+  });
+  S.lessons.set(l.id, l); persist(l); return l;
+}
+function openLesson(id, tab = "capture") {
+  if (S.clock.running && S.clock.lessonId !== id) stopClock();
+  S.currentId = id; S.view = "lesson"; S.tab = tab; S.selected = null; S.editingId = null;
+  S.filter = "all"; S.showAll = false; S.confirmDelete = false; S.quiz = null; S.aiErr = ""; S.nudgeOn = false;
+  const l = cur();
+  if (S.clock.lessonId !== id) { S.clock = { running: false, base: l ? l.elapsed : 0, startedAt: 0, lessonId: id }; S.lastNudgeAt = -1; }
+  S.draft = ""; S.draftTag = ""; S.draftT = null;
+  render(); window.scrollTo(0, 0);
+}
+function goLibrary() {
+  if (S.clock.running) stopClock();
+  S.view = "library"; S.currentId = null; S.newOpen = false; render(); window.scrollTo(0, 0);
+}
+
+/* ---------- clock ---------- */
+const elapsed = () => S.clock.base + (S.clock.running ? (Date.now() - S.clock.startedAt) / 1000 : 0);
+let tickTimer = null;
+function startClock() {
+  S.clock.running = true; S.clock.startedAt = Date.now();
+  S.lastNudgeAt = Math.floor(elapsed() / 60 / (S.nudgeMin || 1));
+  try { ensureAudio(); } catch {}
+  try { navigator.wakeLock?.request("screen").then(w => S.wake = w).catch(() => {}); } catch {}
+  clearInterval(tickTimer); tickTimer = setInterval(tick, 500); tick(); renderClock();
+}
+function stopClock() {
+  S.clock.base = elapsed(); S.clock.running = false; clearInterval(tickTimer);
+  try { S.wake?.release(); } catch {}
+  const l = S.lessons.get(S.clock.lessonId); if (l) { l.elapsed = Math.floor(S.clock.base); persist(l, false); }
+  renderClock();
+}
+function tick() {
+  const e = elapsed();
+  const t = $("#clockTime"); if (t && !S.editingTime) t.textContent = fmt(e);
+  if (S.nudgeMin > 0) {
+    const period = S.nudgeMin * 60, slot = Math.floor(e / period);
+    const m = $("#meter span"); if (m) m.style.width = ((e % period) / period * 100).toFixed(1) + "%";
+    const nx = $("#nextPause"); if (nx) nx.textContent = "Next pause at " + fmt((slot + 1) * period);
+    if (S.clock.running && slot > S.lastNudgeAt && slot > 0) { S.lastNudgeAt = slot; fireNudge(); }
+  }
+}
+let actx = null;
+function ensureAudio() { if (!actx) { const A = window.AudioContext || window.webkitAudioContext; if (A) actx = new A(); } if (actx?.state === "suspended") actx.resume(); }
+function chime() {
+  try {
+    if (!actx) return; const t0 = actx.currentTime;
+    [660, 880].forEach((f, i) => { const o = actx.createOscillator(), g = actx.createGain(); o.frequency.value = f; o.type = "sine"; g.gain.setValueAtTime(0, t0 + i * .18); g.gain.linearRampToValueAtTime(.18, t0 + i * .18 + .02); g.gain.exponentialRampToValueAtTime(.001, t0 + i * .18 + .5); o.connect(g).connect(actx.destination); o.start(t0 + i * .18); o.stop(t0 + i * .18 + .55); });
+  } catch {}
+}
+function fireNudge() { S.nudgeOn = true; chime(); try { navigator.vibrate?.(120); } catch {} const n = $("#nudge"); if (n) { n.hidden = false; n.style.animation = "none"; void n.offsetWidth; n.style.animation = ""; } }
+
+/* ---------- notes ---------- */
+function addNote(text, tag, t) {
+  const l = cur(); if (!l) return;
+  let raw = text.trim(); if (!raw) return;
+  const m = raw.match(/^([#?!=])\s+([\s\S]*)$/);
+  if (m && !tag) { tag = { "#": "section", "?": "q", "!": "test", "=": "def" }[m[1]]; raw = m[2].trim(); }
+  if (!raw) return;
+  const level = tag === "section" ? 0 : (l.notes.some(n => n.tag === "section") ? 1 : 0);
+  l.notes.push({ id: mkId("n"), text: raw, tag: tag || "", level, t: Math.floor(t ?? elapsed()) });
+  persist(l);
+}
+function move(id, dir) {
+  const l = cur(), i = l.notes.findIndex(n => n.id === id), j = i + dir;
+  if (i < 0 || j < 0 || j >= l.notes.length) return;
+  [l.notes[i], l.notes[j]] = [l.notes[j], l.notes[i]]; persist(l);
+}
+function indent(id, d) {
+  const l = cur(), n = l.notes.find(n => n.id === id); if (!n) return;
+  if (n.tag === "section") return;
+  n.level = Math.max(0, Math.min(2, n.level + d)); persist(l);
+}
+
+/* ---------- rendering ---------- */
+function softRender() {
+  const a = document.activeElement;
+  if (a && /^(TEXTAREA|INPUT|SELECT)$/.test(a.tagName)) { setSync(S.syncState); return; }
+  if (S.view === "lesson" && !cur()) { goLibrary(); return; }
+  if (S.editingId || S.aiBusy) return;
+  render();
+}
+function render() {
+  renderTop();
+  const main = $("#main");
+  main.innerHTML = S.view === "library" ? libraryHTML() : lessonHTML();
+  afterRender();
+}
+function renderTop() {
+  const top = $("#top");
+  if (S.view === "library") {
+    top.innerHTML = `<div class="wrap"><div class="brand"><span class="brand-mark" aria-hidden="true">✎</span>Scribble</div><div style="flex:1"></div><span id="sync" class="sync">${esc(syncLabel())}</span></div>`;
+    return;
+  }
+  const l = cur(); if (!l) return;
+  const n = l.notes.filter(x => x.tag !== "section").length, cards = buildDeck(l).length;
+  const tabs = [["capture", "Take notes", fmt(l.elapsed || 0)], ["organize", "Organize", n + " notes"], ["summary", "Summary", l.mySummary.trim() ? "written" : "to do"], ["quiz", "Quiz me", cards + " cards"]];
+  top.innerHTML = `<div class="wrap"><button class="back" data-act="home" aria-label="Back to lessons">‹ Lessons</button>
+    <div class="top-title"><div class="eyebrow">${esc(l.course || "No course")}</div><h1>${esc(l.title)}</h1></div></div>
+    <div class="wrap"><div class="tabs" role="tablist">${tabs.map(([k, label, sub]) => `<button class="tab" role="tab" aria-selected="${S.tab === k}" data-act="tab" data-tab="${k}">${label}<small>${esc(sub)}</small></button>`).join("")}</div></div>`;
+}
+
+function libraryHTML() {
+  const ls = [...S.lessons.values()].sort((a, b) => b.updatedAt - a.updatedAt);
+  const list = ls.map(l => {
+    const notes = l.notes.filter(n => n.tag !== "section");
+    const star = notes.filter(n => n.tag === "test").length, rw = notes.filter(n => n.tag === "rewatch").length;
+    return `<li><button class="card lesson" data-act="open" data-id="${l.id}">
+      <div class="eyebrow">${esc(l.course || "No course")}</div>
+      <div class="title">${esc(l.title)}</div>
+      <div class="stats"><span><b>${notes.length}</b> notes</span><span><b>${star}</b> ★ for the test</span>${rw ? `<span class="tag rewatch" style="vertical-align:0">${rw} to rewatch</span>` : ""}<span>${l.mySummary.trim() ? "Summary written" : "No summary yet"}</span><span>${fmtDate(l.updatedAt)}</span></div>
+    </button></li>`;
+  }).join("");
+  const form = S.newOpen ? `<form class="card newform" id="newForm">
+      <h3 class="h">New lesson</h3>
+      <label class="stack" style="gap:4px"><span class="label" style="margin:0">Lesson title</span><input class="field" id="nfTitle" placeholder="e.g. Week 4 — Supply and demand" required></label>
+      <label class="stack" style="gap:4px"><span class="label" style="margin:0">Course</span><input class="field" id="nfCourse" placeholder="e.g. ECON 101" list="courses"></label>
+      <datalist id="courses">${[...new Set(ls.map(l => l.course).filter(Boolean))].map(c => `<option value="${esc(c)}">`).join("")}</datalist>
+      <div class="row-wrap"><button class="btn primary" type="submit">Start taking notes</button><button class="btn ghost" type="button" data-act="cancelNew">Cancel</button></div>
+    </form>` : `<div class="row-wrap"><button class="btn primary" data-act="newOpen">+ New lesson</button>${ls.some(l => l.example) ? "" : `<button class="btn" data-act="example">Open an example lesson</button>`}</div>`;
+  return `<div class="stack">
+    <section class="hero"><h2>Watch first. <mark>Pause</mark>, then write.</h2>
+      <p>A notebook built for video lessons: one tap stamps the time, a gentle reminder tells you when to pause, and everything turns into a summary and a quiz before your test.</p></section>
+    ${form}
+    ${ls.length ? `<section><p class="label">Your lessons</p><ul class="lesson-list">${list}</ul></section>` :
+      `<section class="card empty"><h3 class="h">No lessons yet</h3><p class="muted">Each video you watch becomes a lesson. Start one when you press play, or open the example to see how a finished set of notes looks.</p></section>`}
+    <section class="card routine"><p class="label">The routine for each video</p><ol>
+      <li><p><b>Press Start when you press play.</b>Every note gets the video time, so you can jump back to it later.</p></li>
+      <li><p><b>Pause when the reminder shows.</b>Stop the video and write the main point in one line. Don't type while it's talking.</p></li>
+      <li><p><b>Lost the thread? Tap “Missed that”.</b>It marks the time to rewatch so you can keep going instead of falling behind.</p></li>
+      <li><p><b>After the video, tidy and test yourself.</b>Organize, write a short summary from memory, then use Quiz me before the real test.</p></li>
+    </ol></section>
+  </div>`;
+}
+
+function noteRow(n, opts = {}) {
+  const tag = n.tag && n.tag !== "section" ? `<span class="tag ${n.tag}">${esc(n.tag === "test" ? "★ Test" : TAGS[n.tag].label)}</span>` : "";
+  const cls = ["note", n.tag === "section" ? "section" : "", n.tag === "test" ? "test" : "", opts.sel ? "sel" : ""].join(" ");
+  if (opts.editing) {
+    return `<li class="${cls}" data-level="${n.level}" data-id="${n.id}"><div class="editbox">
+      <textarea class="field" id="editText" rows="3">${esc(n.text)}</textarea>
+      <div class="row-wrap"><span class="muted" style="font-size:.85rem">Time</span><input class="field mono" id="editTime" value="${fmt(n.t)}" style="width:9ch;padding:6px 8px"><div style="flex:1"></div><button class="btn small ghost" data-act="editCancel">Cancel</button><button class="btn small primary" data-act="editSave">Save</button></div>
+    </div></li>`;
+  }
+  return `<li class="${cls}" data-level="${n.level}" data-id="${n.id}" ${opts.click ? `data-act="select" tabindex="0"` : ""}><span class="ts">${fmt(n.t)}</span><div class="body">${tag}<span class="txt">${esc(n.text)}</span></div></li>`;
+}
+
+function lessonHTML() {
+  const l = cur(); if (!l) return "";
+  if (S.tab === "capture") return captureHTML(l);
+  if (S.tab === "organize") return organizeHTML(l);
+  if (S.tab === "summary") return summaryHTML(l);
+  return quizHTML(l);
+}
+
+function captureHTML(l) {
+  const period = S.nudgeMin * 60, e = elapsed();
+  return `<div class="stack">
+    <section class="card clock">
+      <div class="clock-row">
+        <div>
+          <div class="clock-lbl">Video time ${S.clock.running ? "· running" : "· paused"}</div>
+          ${S.editingTime ? `<input class="clock-time-input" id="clockEdit" value="${fmt(e)}" inputmode="numeric" aria-label="Set video time (mm:ss)">` :
+            `<button class="clock-time ${S.clock.running ? "running" : ""}" id="clockTime" data-act="editTime" title="Tap to match the video's time">${fmt(e)}</button>`}
+        </div>
+        <button class="btn ${S.clock.running ? "" : "primary"}" data-act="toggleClock" style="min-width:120px">${S.clock.running ? "❚❚ Pause" : (e > 0 ? "▶ Resume" : "▶ Start")}</button>
+      </div>
+      ${S.nudgeMin > 0 ? `<div class="meter" id="meter" aria-hidden="true"><span style="width:${((e % period) / period * 100).toFixed(1)}%"></span></div>` : ""}
+      <div class="clock-meta">
+        <label>Pause reminder <select id="nudgeSel" aria-label="Pause reminder interval">${[0, 3, 5, 8, 10, 15].map(m => `<option value="${m}" ${m === S.nudgeMin ? "selected" : ""}>${m ? "every " + m + " min" : "off"}</option>`).join("")}</select></label>
+        ${S.nudgeMin > 0 ? `<span id="nextPause">Next pause at ${fmt((Math.floor(e / period) + 1) * period)}</span>` : ""}
+        <span>Tap the time to match your video.</span>
+      </div>
+    </section>
+    <div class="nudge" id="nudge" ${S.nudgeOn ? "" : "hidden"} role="status"><span>Pause the video. What was the main point since the last pause? Write it in one line.</span><button class="btn small" data-act="dismissNudge">Done</button></div>
+    <section class="sheet" aria-label="Notes so far"><ol class="notes" id="recent">${recentHTML(l)}</ol></section>
+  </div>
+  <form class="composer" id="composer">
+    <div class="chips" role="group" aria-label="Note type">${CHIP_ORDER.map(k => `<button type="button" class="chip ${k}" data-keepfocus data-act="chip" data-tag="${k}" aria-pressed="${S.draftTag === k}">${TAGS[k].chip}</button>`).join("")}</div>
+    <div class="comp-row"><textarea id="draft" rows="1" placeholder="Type a note, then press Enter" aria-label="New note" enterkeyhint="send">${esc(S.draft)}</textarea><button class="btn primary" type="submit" data-keepfocus>Add</button></div>
+    <div class="comp-foot"><button type="button" class="btn small ghost warn" data-act="missed" data-keepfocus>⟲ Missed that — mark to rewatch</button><span class="hint">Shortcuts: <code>#</code> section <code>?</code> question <code>!</code> test</span></div>
+  </form>`;
+}
+function recentHTML(l) {
+  if (!l.notes.length) return `<li class="sheet-empty">Your notes appear here with the video time beside each one. Try “# Introduction” to start a section.</li>`;
+  const limit = 8, hidden = S.showAll ? 0 : Math.max(0, l.notes.length - limit);
+  return (hidden ? `<li><button class="more-link" data-act="showAll">Show ${hidden} earlier note${hidden > 1 ? "s" : ""}</button></li>` : "") +
+    l.notes.slice(hidden).map(n => noteRow(n)).join("");
+}
+
+const FILTERS = [["all", "All"], ["test", "★ On the test"], ["q", "Questions"], ["def", "Definitions"], ["key", "Key ideas"], ["rewatch", "⟲ Rewatch"]];
+function organizeHTML(l) {
+  const filtered = S.filter === "all" ? l.notes : l.notes.filter(n => n.tag === S.filter || n.tag === "section");
+  const visible = S.filter === "all" ? filtered : filtered.filter((n, i, arr) => n.tag !== "section" || (arr[i + 1] && arr[i + 1].tag !== "section"));
+  const list = visible.length ? visible.map(n => noteRow(n, { click: true, sel: S.selected === n.id, editing: S.editingId === n.id })).join("") :
+    `<li class="sheet-empty">${l.notes.length ? "No notes of this type yet." : "No notes yet. Add them in Take notes, or with the buttons below."}</li>`;
+  return `<div class="stack org">
+    <section class="card stack" style="gap:var(--s3)">
+      <label class="stack" style="gap:4px"><span class="label" style="margin:0">Lesson title</span><input class="field" id="metaTitle" value="${esc(l.title)}"></label>
+      <label class="stack" style="gap:4px"><span class="label" style="margin:0">Course</span><input class="field" id="metaCourse" value="${esc(l.course)}"></label>
+    </section>
+    <div class="filters" role="group" aria-label="Show">${FILTERS.map(([k, label]) => `<button class="chip" data-act="filter" data-f="${k}" aria-pressed="${S.filter === k}">${label}</button>`).join("")}</div>
+    <p class="muted" style="margin:0;font-size:.88rem">Tap a note to move, indent, retype or edit it.${S.filter !== "all" ? " Clear the filter to reorder." : ""}</p>
+    <section class="sheet"><ol class="notes">${list}</ol></section>
+    <div class="row-wrap"><button class="btn small" data-act="insert" data-kind="section">+ Section</button><button class="btn small" data-act="insert" data-kind="note">+ Note</button><button class="btn small" data-act="export">Copy / save notes</button></div>
+    <section class="confirm">${S.confirmDelete ? `<span>Delete “${esc(l.title)}” and all its notes?</span><button class="btn small danger" data-act="deleteLesson">Delete</button><button class="btn small ghost" data-act="cancelDelete">Keep it</button>` : `<button class="btn small ghost warn" data-act="askDelete">Delete lesson</button>`}</section>
+    ${S.selected && !S.editingId ? `<div class="pad-bottom"></div>` : ""}
+  </div>${S.selected && !S.editingId ? actionBarHTML(l) : ""}`;
+}
+const ICON = {
+  up: '<path d="M12 19V5M5 12l7-7 7 7"/>', down: '<path d="M12 5v14M5 12l7 7 7-7"/>',
+  out: '<path d="M11 17l-5-5 5-5M18 17l-5-5 5-5"/>', in: '<path d="M13 17l5-5-5-5M6 17l5-5-5-5"/>',
+  edit: '<path d="M4 20h4L19 9l-4-4L4 16z"/>', del: '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>', tag: '<path d="M3 12V3h9l9 9-9 9z"/><circle cx="8" cy="8" r="1.5"/>'
+};
+const ico = k => `<svg viewBox="0 0 24 24" aria-hidden="true">${ICON[k]}</svg>`;
+function actionBarHTML(l) {
+  const n = l.notes.find(x => x.id === S.selected); if (!n) return "";
+  const i = l.notes.indexOf(n), canMove = S.filter === "all";
+  return `<div class="actionbar" role="toolbar" aria-label="Note actions"><div class="wrap">
+    <div class="chips" style="padding:0" role="group" aria-label="Note type">${["", ...CHIP_ORDER, "rewatch"].map(k => `<button class="chip ${k}" data-act="retag" data-tag="${k}" aria-pressed="${n.tag === k}">${k ? TAGS[k].chip : "Plain"}</button>`).join("")}</div>
+    <div class="ab-row">
+      <button class="ab-btn" data-act="mv" data-d="-1" ${!canMove || i === 0 ? "disabled" : ""}>${ico("up")}Up</button>
+      <button class="ab-btn" data-act="mv" data-d="1" ${!canMove || i === l.notes.length - 1 ? "disabled" : ""}>${ico("down")}Down</button>
+      <button class="ab-btn" data-act="ind" data-d="-1" ${n.level === 0 || n.tag === "section" ? "disabled" : ""}>${ico("out")}Outdent</button>
+      <button class="ab-btn" data-act="ind" data-d="1" ${n.level === 2 || n.tag === "section" ? "disabled" : ""}>${ico("in")}Indent</button>
+      <button class="ab-btn" data-act="edit">${ico("edit")}Edit</button>
+      <button class="ab-btn del" data-act="delNote">${ico("del")}Delete</button>
+    </div></div></div>`;
+}
+
+function keyPoints(l) {
+  const groups = []; let g = { title: "", items: [] };
+  l.notes.forEach(n => {
+    if (n.tag === "section") { if (g.items.length || g.title) groups.push(g); g = { title: n.text, items: [] }; }
+    else if (["test", "key", "def"].includes(n.tag)) g.items.push(n);
+  });
+  if (g.items.length || g.title) groups.push(g);
+  return groups.filter(x => x.items.length);
+}
+function summaryHTML(l) {
+  const kp = keyPoints(l), noteCount = l.notes.filter(n => n.tag !== "section").length;
+  const rw = l.notes.filter(n => n.tag === "rewatch");
+  let ai = "";
+  if (S.aiBusy) ai = `<div class="thinking"><span class="dot"></span>Claude is reading your ${noteCount} notes… this can take up to a minute.<button class="btn small ghost" data-act="aiStop">Stop</button></div>`;
+  else if (l.ai) {
+    const stale = l.ai.noteCount !== noteCount;
+    ai = `<div class="ai stack" style="gap:var(--s3)">
+      ${stale ? `<p class="ai-stale" style="margin:0">Your notes changed since this was made.</p>` : ""}
+      <div><p class="label">In short</p><ul>${(l.ai.summary || []).map(s => `<li>${esc(s)}</li>`).join("")}</ul></div>
+      ${(l.ai.terms || []).length ? `<div><p class="label">Key terms</p><dl class="terms">${l.ai.terms.map(t => `<dt>${esc(t.term)}</dt><dd>${esc(t.meaning)}</dd>`).join("")}</dl></div>` : ""}
+      ${(l.ai.gaps || []).length ? `<div><p class="label">Check these in the video</p><ul class="gaps">${l.ai.gaps.map(s => `<li>${esc(s)}</li>`).join("")}</ul></div>` : ""}
+      <p class="muted" style="margin:0;font-size:.84rem">Made from your notes only, with ${(l.ai.questions || []).length} practice questions added to Quiz me.</p>
+      <div class="row-wrap"><button class="btn small" data-act="ai" data-fresh="1">${stale ? "Update summary" : "Make a new one"}</button><button class="btn small" data-act="tab" data-tab="quiz">Quiz me</button></div>
+    </div>`;
+  } else if (S.sample) ai = `<p style="margin:0 0 var(--s3)">Claude turns your notes into a short summary, key terms, a list of gaps to check, and practice questions for Quiz me.</p><button class="btn primary" data-act="ai" ${noteCount ? "" : "disabled"}>Summarize with Claude</button>${noteCount ? "" : `<p class="muted" style="font-size:.85rem">Add a few notes first.</p>`}`;
+  else ai = `<p class="muted" style="margin:0">Claude summaries aren't available on this page right now. Your key points and own summary below still work.</p>`;
+  return `<div class="stack">
+    <section class="card"><p class="label">Claude's summary</p>${S.aiErr ? `<p class="ai-err">${esc(S.aiErr)}</p>` : ""}${ai}</section>
+    <section class="card"><p class="label">In your own words</p>
+      <p style="margin:0 0 var(--s3);font-size:.95rem">Cover your notes and write 3–5 sentences from memory. Then check them against your notes. Recalling it yourself is what makes it stick for the test.</p>
+      <textarea class="field" id="mySummary" rows="6" placeholder="This lesson was about…">${esc(l.mySummary)}</textarea>
+    </section>
+    <section class="card"><p class="label">Key points from your notes</p>
+      ${kp.length ? kp.map(g => `<div class="kp-sec">${g.title ? `<h4>${esc(g.title)}</h4>` : ""}<ul>${g.items.map(n => `<li>${n.tag === "test" ? "<b>★</b> " : ""}${esc(n.text)} <span class="muted mono" style="font-size:.75rem">${fmt(n.t)}</span></li>`).join("")}</ul></div>`).join("") :
+        `<p class="muted" style="margin:0">Mark notes as Key idea, Definition or ★ On the test and they collect here, grouped by section.</p>`}
+    </section>
+    ${rw.length ? `<section class="card"><p class="label">Rewatch before the test</p><ul style="margin:0;padding-left:1.2em">${rw.map(n => `<li><span class="mono">${fmt(n.t)}</span> — ${esc(n.text)}</li>`).join("")}</ul></section>` : ""}
+    <div class="row-wrap"><button class="btn" data-act="export">Copy / save notes</button></div>
+  </div>`;
+}
+
+function buildDeck(l) {
+  const cards = [];
+  (l.ai?.questions || []).forEach(q => q && q.q && cards.push({ front: String(q.q), back: String(q.a || ""), src: "Practice question" }));
+  l.notes.forEach((n, i) => {
+    if (n.tag === "q") {
+      const kids = [];
+      for (let j = i + 1; j < l.notes.length && l.notes[j].level > n.level && l.notes[j].tag !== "section"; j++) kids.push(l.notes[j].text);
+      cards.push({ front: n.text, back: kids.length ? kids.join("\n") : `Answer from memory, then check the video at ${fmt(n.t)}.`, src: "Your question" });
+    }
+    if (n.tag === "def") {
+      const m = n.text.match(/^(.{1,80}?)\s*(?::|=| — | - )\s*([\s\S]+)$/);
+      if (m) cards.push({ front: `Define: ${m[1]}`, back: m[2], src: "Your definition" });
+    }
+  });
+  return cards;
+}
+function quizHTML(l) {
+  const deck = buildDeck(l);
+  if (!deck.length) return `<div class="stack"><section class="card empty"><h3 class="h">No cards yet</h3>
+    <p class="muted">Cards come from notes marked Question, Definitions written as “term: meaning”, and practice questions Claude makes from your notes.</p>
+    <div class="row-wrap" style="justify-content:center">${S.sample ? `<button class="btn primary" data-act="ai" ${l.notes.length ? "" : "disabled"}>Make questions with Claude</button>` : ""}<button class="btn" data-act="tab" data-tab="organize">Mark notes</button></div></section></div>`;
+  if (!S.quiz || S.quiz.size !== deck.length) S.quiz = { order: deck.map((_, i) => i), i: 0, flipped: false, got: 0, missed: [], size: deck.length, done: false };
+  const q = S.quiz;
+  if (q.done) return `<div class="stack"><section class="card empty"><h3 class="h">Round finished</h3>
+    <p class="score" style="justify-content:center"><span class="got">Got it <b>${q.got}</b></span><span class="miss">Missed <b>${q.missed.length}</b></span></p>
+    <p class="muted">${q.missed.length ? "Go over the ones you missed now, then come back later today. Spacing your practice helps it last." : "Nice. Try again tomorrow to make it stick."}</p>
+    <div class="row-wrap" style="justify-content:center">${q.missed.length ? `<button class="btn primary" data-act="quizMissed">Practice the ${q.missed.length} missed</button>` : ""}<button class="btn" data-act="quizRestart">Start over</button></div></section></div>`;
+  const c = deck[q.order[q.i]];
+  return `<div class="stack">
+    <div class="progress"><span>Card <b class="mono">${q.i + 1}</b> of ${q.order.length}</span><span class="score"><span class="got">✓ ${q.got}</span><span class="miss">✗ ${q.missed.length}</span></span></div>
+    <button class="card flash" data-act="flip" aria-live="polite">
+      <span class="src">${esc(c.src)}</span>
+      <span class="q">${esc(c.front)}</span>
+      ${q.flipped ? `<span class="a">${esc(c.back)}</span>` : `<span class="tap">Say or write your answer, then tap to check</span>`}
+    </button>
+    ${q.flipped ? `<div class="row-wrap" style="justify-content:center"><button class="btn danger" data-act="grade" data-g="0">✗ Missed it</button><button class="btn primary" data-act="grade" data-g="1">✓ Got it</button></div>` : `<div class="row-wrap" style="justify-content:center"><button class="btn primary" data-act="flip">Show answer</button></div>`}
+    <div class="row-wrap" style="justify-content:center"><button class="btn small ghost" data-act="quizShuffle">Shuffle</button></div>
+  </div>`;
+}
+
+function afterRender() {
+  const d = $("#draft");
+  if (d) autoGrow(d);
+  const ce = $("#clockEdit"); if (ce) { ce.focus(); ce.select(); }
+  const et = $("#editText"); if (et) { et.focus(); et.setSelectionRange(et.value.length, et.value.length); }
+}
+function autoGrow(t) { t.style.height = "auto"; t.style.height = Math.min(t.scrollHeight + 2, window.innerHeight * .4) + "px"; }
+function renderClock() { if (S.view === "lesson" && S.tab === "capture") { const draft = $("#draft"), had = document.activeElement === draft; render(); if (had) $("#draft")?.focus(); } }
+function updateTopText() {
+  const l = cur(); if (!l || S.view !== "lesson") return;
+  const h = $("#top h1"); if (h) h.textContent = l.title;
+  const e = $("#top .eyebrow"); if (e) e.textContent = l.course || "No course";
+  const sm = $('#top [data-tab="summary"] small'); if (sm) sm.textContent = l.mySummary.trim() ? "written" : "to do";
+}
+function refreshRecent() { const r = $("#recent"), l = cur(); if (r && l) r.innerHTML = recentHTML(l); renderTop(); }
+
+let toastTimer;
+function toast(msg) {
+  let t = $(".toast"); if (!t) { t = document.createElement("div"); t.className = "toast"; t.setAttribute("role", "status"); document.body.appendChild(t); }
+  t.textContent = msg; t.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => t.hidden = true, 2600);
+}
+
+/* ---------- AI ---------- */
+function notesForAI(l) {
+  return l.notes.map(n => `${"  ".repeat(n.level)}[${fmt(n.t)}]${n.tag ? " (" + TAGS[n.tag].label + ")" : ""} ${n.text}`).join("\n").slice(0, 60000);
+}
+function aiErrCopy(code) {
+  switch (code) {
+    case "cancelled": return "";
+    case "not_granted": case "sampling_disabled": case "not_declared": case "capability_disabled": case "capability_removed":
+      S.sample = null; return "Claude isn't available here. Your key points and own summary still work.";
+    case "rate_limited": return "Too many requests right now. Try again in a minute.";
+    case "session_expired": return "Sign in to Claude again, then try once more.";
+    case "prompt_too_large": return "These notes are too long to send at once. Try splitting the lesson.";
+    case "refused": return "Claude couldn't work with these notes. Try editing them and ask again.";
+    case "invalid_json": case "empty_completion": return "Claude's answer came back incomplete. Tap Summarize to try again.";
+    default: return "Couldn't reach Claude. Tap Summarize to try again.";
+  }
+}
+async function runAI(fresh) {
+  const l = cur(); if (!l || !S.sample || S.aiBusy) return;
+  const prompt = `A student took these notes while watching a recorded lesson titled "${l.title}"${l.course ? ` for the course "${l.course}"` : ""}. Each line has the video time, an optional note type, and the note. Indentation shows sub-points. Notes marked "On the test" are what the student thinks will be tested. Notes marked "Rewatch" are moments they missed.
+
+NOTES:
+${notesForAI(l)}
+
+Reply with only a JSON object in this shape:
+{"summary": ["3 to 6 short bullet sentences in plain language covering the main ideas"],
+ "terms": [{"term": "a key term from the notes", "meaning": "a one-line meaning taken from the notes"}],
+ "questions": [{"q": "a test-style question", "a": "a short answer"}],
+ "gaps": ["up to 3 short things that look missing, unclear or marked to rewatch, with the video time if known"]}
+Rules: use only what is in the notes; do not add outside facts. Up to 8 terms. Write 5 to 8 questions that mix recall and understanding, and favour notes marked "On the test". If the notes are thin, return fewer items.`;
+  S.aiBusy = true; S.aiErr = ""; S.aiCtl = new AbortController(); render();
+  try {
+    const r = await S.sample.json(prompt, { signal: S.aiCtl.signal, cache: fresh ? false : true });
+    if (!r || typeof r !== "object") throw { code: "invalid_json" };
+    const arr = x => Array.isArray(x) ? x : [];
+    l.ai = {
+      summary: arr(r.summary).map(String).slice(0, 8),
+      terms: arr(r.terms).filter(t => t && t.term).map(t => ({ term: String(t.term), meaning: String(t.meaning || "") })).slice(0, 10),
+      questions: arr(r.questions).filter(q => q && q.q).map(q => ({ q: String(q.q), a: String(q.a || "") })).slice(0, 10),
+      gaps: arr(r.gaps).map(String).slice(0, 4),
+      at: Date.now(), noteCount: l.notes.filter(n => n.tag !== "section").length
+    };
+    S.quiz = null; persist(l);
+  } catch (e) { S.aiErr = aiErrCopy(e && e.code); }
+  S.aiBusy = false; S.aiCtl = null; render();
+}
+
+/* ---------- export ---------- */
+function toMarkdown(l) {
+  const out = [`# ${l.title}`, `${l.course ? l.course + " · " : ""}${new Date(l.createdAt).toLocaleDateString()}`, ""];
+  l.notes.forEach(n => {
+    if (n.tag === "section") { out.push("", `## ${n.text}`); return; }
+    const tag = n.tag === "test" ? " ★" : n.tag ? ` (${TAGS[n.tag].label})` : "";
+    out.push(`${"  ".repeat(Math.max(0, n.level - (l.notes.some(x => x.tag === "section") ? 1 : 0)))}- [${fmt(n.t)}] ${n.text}${tag}`);
+  });
+  if (l.mySummary.trim()) out.push("", "## My summary", l.mySummary.trim());
+  if (l.ai?.summary?.length) out.push("", "## Claude's summary", ...l.ai.summary.map(s => "- " + s));
+  if (l.ai?.questions?.length) out.push("", "## Practice questions", ...l.ai.questions.map((q, i) => `${i + 1}. ${q.q}\n   Answer: ${q.a}`));
+  return out.join("\n").replace(/\n{3,}/g, "\n\n") + "\n";
+}
+function openExport() {
+  const l = cur(); if (!l) return;
+  const md = toMarkdown(l);
+  $("#layer").innerHTML = `<div class="overlay" data-act="closeLayer"><div class="card" role="dialog" aria-label="Copy or save notes">
+    <h3 class="h">Your notes as text</h3>
+    <textarea class="field" id="exportText" readonly>${esc(md)}</textarea>
+    <div class="row-wrap"><button class="btn primary" data-act="copy">Copy</button>${S.downloads ? `<button class="btn" data-act="saveFile">Save as .md file</button>` : ""}<div style="flex:1"></div><button class="btn ghost" data-act="closeLayer">Close</button></div>
+  </div></div>`;
+}
+
+/* ---------- events ---------- */
+document.addEventListener("mousedown", e => { if (e.target.closest("[data-keepfocus]")) e.preventDefault(); });
+
+document.addEventListener("click", async e => {
+  const el = e.target.closest("[data-act]"); if (!el) return;
+  const act = el.dataset.act, l = cur();
+  switch (act) {
+    case "home": goLibrary(); break;
+    case "open": openLesson(el.dataset.id, (S.lessons.get(el.dataset.id)?.notes.length ? "organize" : "capture")); break;
+    case "newOpen": S.newOpen = true; render(); $("#nfTitle")?.focus(); break;
+    case "cancelNew": S.newOpen = false; render(); break;
+    case "example": { const x = exampleLesson(); openLesson(x.id, "organize"); break; }
+    case "tab": S.tab = el.dataset.tab; S.selected = null; S.editingId = null; render(); window.scrollTo(0, 0); break;
+    case "toggleClock": S.clock.running ? stopClock() : startClock(); break;
+    case "editTime": S.editingTime = true; render(); break;
+    case "dismissNudge": { S.nudgeOn = false; const n = $("#nudge"); if (n) n.hidden = true; $("#draft")?.focus(); break; }
+    case "chip": {
+      S.draftTag = S.draftTag === el.dataset.tag ? "" : el.dataset.tag;
+      document.querySelectorAll(".composer .chip").forEach(c => c.setAttribute("aria-pressed", String(c.dataset.tag === S.draftTag)));
+      break;
+    }
+    case "missed": addNote("Missed something here", "rewatch"); toast("Marked " + fmt(elapsed()) + " to rewatch. Keep going."); refreshRecent(); scrollSheetEnd(); break;
+    case "showAll": S.showAll = true; refreshRecent(); break;
+    case "filter": S.filter = el.dataset.f; S.selected = null; render(); break;
+    case "select": if (S.editingId) return; S.selected = S.selected === el.dataset.id ? null : el.dataset.id; render(); break;
+    case "mv": move(S.selected, +el.dataset.d); render(); break;
+    case "ind": indent(S.selected, +el.dataset.d); render(); break;
+    case "retag": { const x = l.notes.find(n => n.id === S.selected); if (x) { x.tag = el.dataset.tag; if (x.tag === "section") x.level = 0; persist(l); render(); } break; }
+    case "edit": S.editingId = S.selected; render(); break;
+    case "editCancel": { const x = l.notes.find(n => n.id === S.editingId); if (x && !x.text.trim()) { l.notes = l.notes.filter(n => n !== x); persist(l); S.selected = null; } S.editingId = null; render(); break; }
+    case "editSave": {
+      const x = l.notes.find(n => n.id === S.editingId), txt = $("#editText").value.trim(), t = parseTime($("#editTime").value);
+      if (x) { if (!txt) { l.notes = l.notes.filter(n => n !== x); S.selected = null; } else { x.text = txt; if (t !== null) x.t = t; } persist(l); }
+      S.editingId = null; render(); break;
+    }
+    case "delNote": { const i = l.notes.findIndex(n => n.id === S.selected); if (i >= 0) { const [gone] = l.notes.splice(i, 1); persist(l); S.selected = null; S.undo = { id: l.id, note: gone, i }; render(); toastUndo("Note deleted"); } break; }
+    case "undo": { const u = S.undo, ul = u && S.lessons.get(u.id); if (ul) { ul.notes.splice(u.i, 0, u.note); persist(ul); S.undo = null; render(); toast("Restored"); } break; }
+    case "insert": {
+      const kind = el.dataset.kind, idx = S.selected ? l.notes.findIndex(n => n.id === S.selected) + 1 : l.notes.length;
+      const prev = l.notes[idx - 1];
+      const note = { id: mkId("n"), text: "", tag: kind === "section" ? "section" : "", level: kind === "section" ? 0 : (prev ? Math.max(prev.tag === "section" ? 1 : prev.level, 0) : 0), t: prev ? prev.t : 0 };
+      l.notes.splice(idx, 0, note); S.filter = "all"; S.selected = note.id; S.editingId = note.id; render(); break;
+    }
+    case "askDelete": S.confirmDelete = true; render(); break;
+    case "cancelDelete": S.confirmDelete = false; render(); break;
+    case "deleteLesson": await deleteLesson(l.id); toast("Lesson deleted"); goLibrary(); break;
+    case "ai": runAI(el.dataset.fresh === "1"); break;
+    case "aiStop": S.aiCtl?.abort(); break;
+    case "export": openExport(); break;
+    case "closeLayer": if (e.target === el || el.tagName === "BUTTON") $("#layer").innerHTML = ""; break;
+    case "copy": {
+      const txt = $("#exportText");
+      try { await navigator.clipboard.writeText(txt.value); toast("Copied"); }
+      catch { txt.focus(); txt.select(); toast("Selected — copy it from your keyboard menu"); }
+      break;
+    }
+    case "saveFile": {
+      try { const r = await S.downloads.save({ filename: (l.title.replace(/[^\w\- ]+/g, "").trim() || "notes") + ".md", data: $("#exportText").value }); if (r?.status === "saved") toast("Saved"); }
+      catch (err) { if (err?.code === "unavailable") { S.downloads = null; toast("Saving files isn't available here. Use Copy instead."); } }
+      break;
+    }
+    case "flip": if (!S.quiz.flipped) { S.quiz.flipped = true; render(); } break;
+    case "grade": {
+      const q = S.quiz; if (el.dataset.g === "1") q.got++; else q.missed.push(q.order[q.i]);
+      q.i++; q.flipped = false; if (q.i >= q.order.length) q.done = true; render(); break;
+    }
+    case "quizRestart": S.quiz = null; render(); break;
+    case "quizMissed": { const q = S.quiz; S.quiz = { ...q, order: q.missed, i: 0, flipped: false, got: 0, missed: [], done: false }; render(); break; }
+    case "quizShuffle": { const q = S.quiz; const o = q.order.slice(q.i); for (let i = o.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [o[i], o[j]] = [o[j], o[i]]; } q.order = q.order.slice(0, q.i).concat(o); q.flipped = false; render(); break; }
+  }
+});
+function toastUndo(msg) {
+  toast(msg);
+  const t = $(".toast"); const b = document.createElement("button");
+  b.textContent = "Undo"; b.dataset.act = "undo"; b.style.cssText = "margin-left:12px;border:0;background:none;color:var(--hi);font-weight:800";
+  t.appendChild(b); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.hidden = true, 5000);
+}
+function scrollSheetEnd() { const c = $("#composer"); if (c) c.scrollIntoView({ block: "end" }); }
+
+document.addEventListener("keydown", e => {
+  if (e.target.id === "draft" && e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); submitDraft(); }
+  if (e.target.id === "clockEdit" && e.key === "Enter") { e.preventDefault(); e.target.blur(); }
+  if (e.target.id === "clockEdit" && e.key === "Escape") { S.editingTime = false; render(); }
+  if (e.target.id === "editText" && e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); $('[data-act="editSave"]')?.click(); }
+  if (e.target.matches?.('[data-act="select"]') && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); e.target.click(); }
+  if (e.key === "Escape" && $("#layer").innerHTML) $("#layer").innerHTML = "";
+});
+document.addEventListener("submit", e => {
+  e.preventDefault();
+  if (e.target.id === "composer") submitDraft();
+  if (e.target.id === "newForm") { const x = newLesson($("#nfTitle").value, $("#nfCourse").value); S.newOpen = false; openLesson(x.id, "capture"); }
+});
+function submitDraft() {
+  const d = $("#draft"); if (!d || !d.value.trim()) return;
+  addNote(d.value, S.draftTag, S.draftT ?? elapsed());
+  S.draft = ""; S.draftTag = ""; S.draftT = null; d.value = ""; autoGrow(d);
+  document.querySelectorAll(".composer .chip").forEach(c => c.setAttribute("aria-pressed", "false"));
+  if (S.nudgeOn) { S.nudgeOn = false; const n = $("#nudge"); if (n) n.hidden = true; }
+  refreshRecent(); d.focus(); scrollSheetEnd();
+}
+let metaTimer;
+document.addEventListener("input", e => {
+  const l = cur();
+  if (e.target.id === "draft") { if (!S.draft && e.target.value) S.draftT = elapsed(); S.draft = e.target.value; if (!e.target.value) S.draftT = null; autoGrow(e.target); }
+  if (l && (e.target.id === "metaTitle" || e.target.id === "metaCourse")) {
+    l[e.target.id === "metaTitle" ? "title" : "course"] = e.target.value;
+    clearTimeout(metaTimer); metaTimer = setTimeout(() => { if (!l.title.trim()) l.title = "Untitled lesson"; persist(l); updateTopText(); }, 400);
+  }
+  if (l && e.target.id === "mySummary") { l.mySummary = e.target.value; clearTimeout(metaTimer); metaTimer = setTimeout(() => { persist(l); updateTopText(); }, 600); }
+});
+document.addEventListener("change", e => {
+  if (e.target.id === "nudgeSel") { S.nudgeMin = +e.target.value; lsSet("scribble.nudge", String(S.nudgeMin)); S.lastNudgeAt = S.nudgeMin ? Math.floor(elapsed() / (S.nudgeMin * 60)) : -1; render(); }
+});
+document.addEventListener("focusout", e => {
+  if (e.target.id === "clockEdit") {
+    const t = parseTime(e.target.value);
+    if (t !== null) { S.clock.base = t; if (S.clock.running) S.clock.startedAt = Date.now(); S.lastNudgeAt = S.nudgeMin ? Math.floor(t / (S.nudgeMin * 60)) : -1; const l = cur(); if (l) { l.elapsed = t; persist(l, false); } }
+    S.editingTime = false; setTimeout(render, 250);
+  }
+});
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && S.clock.running) { try { navigator.wakeLock?.request("screen").then(w => S.wake = w).catch(() => {}); } catch {} } });
+
+/* ---------- boot ---------- */
+loadLocal();
+render();
+initCaps();
+})();
+</script>
+
+</body>
+</html>

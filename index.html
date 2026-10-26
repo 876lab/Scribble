@@ -123,6 +123,9 @@ textarea.field{resize:vertical;line-height:1.5}
 .lesson .title{font-family:var(--f-display);font-variation-settings:"CASL" .5;font-weight:750;font-size:1.1rem;margin:2px 0 6px;line-height:1.3}
 .stats{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:.84rem;color:var(--muted)}
 .stats b{color:var(--ink);font-variant-numeric:tabular-nums}
+.demo{display:flex;flex-direction:column;gap:var(--s3)}
+.demo video{display:block;width:auto;max-width:100%;max-height:70vh;margin:0 auto;border-radius:12px;background:var(--paper);border:1px solid var(--rule)}
+.demo p{margin:0;font-size:.88rem;color:var(--muted)}
 .routine ol{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:var(--s3);counter-reset:r}
 .routine li{display:grid;grid-template-columns:28px 1fr;gap:var(--s3);counter-increment:r}
 .routine li::before{content:counter(r);width:26px;height:26px;border-radius:50%;background:var(--accent-soft);color:var(--accent);font-weight:800;display:grid;place-items:center;font-size:.85rem;font-family:var(--f-mono);font-variation-settings:"MONO" 1}
@@ -505,6 +508,9 @@ function libraryHTML() {
     ${form}
     ${ls.length ? `<section><p class="label">Your lessons</p><ul class="lesson-list">${list}</ul></section>` :
       `<section class="card empty"><h3 class="h">No lessons yet</h3><p class="muted">Each video you watch becomes a lesson. Start one when you press play, or open the example to see how a finished set of notes looks.</p></section>`}
+    <section class="card demo"><p class="label" style="margin:0">See how it works</p>
+      <video id="demoVideo" controls playsinline preload="metadata" poster="media/walkthrough-poster.jpg" aria-label="Walkthrough of Scribble, one lesson from start to quiz"><source src="media/walkthrough.mp4" type="video/mp4"></video>
+      <p>About 90 seconds, one lesson from start to quiz. The summary step shows sample text.</p></section>
     <section class="card routine"><p class="label">The routine for each video</p><ol>
       <li><p><b>Press Start when you press play.</b>Every note gets the video time, so you can jump back to it later.</p></li>
       <li><p><b>Pause when the reminder shows.</b>Stop the video and write the main point in one line. Don't type while it's talking.</p></li>

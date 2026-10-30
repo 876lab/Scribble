@@ -14,7 +14,7 @@ Instead of typing while the video talks, Scribble helps you **watch a chunk, pau
 4. **Lost the thread? Tap "Missed that."** It marks the moment to rewatch so you can keep going instead of falling behind.
 5. **After the video, open Organize.** Tap any note to move it, indent it, change its type, or edit it.
 6. **Write a summary from memory** in the Summary tab, then check it against your notes.
-7. **Use Quiz me before the test.** Answer each card, then check yourself.
+7. **Before the test, do a brain dump.** In Quiz me, write everything you remember for 2 minutes without looking, then mark each section "I had this" or "Missed" and quiz yourself on the ones you missed.
 
 ### Note types and shortcuts
 
@@ -34,7 +34,8 @@ Press **Enter** to add a note and **Shift+Enter** for a new line.
 - **Take notes:** lesson clock, pause reminder with a chime, quick note types, "Missed that" button
 - **Organize:** reorder, indent, retype and edit notes; filter by type; edit the lesson title and course
 - **Summary:** automatic key points grouped by section, a space for your own summary, a list of moments to rewatch, and an optional summary from Claude with key terms, gaps and practice questions
-- **Quiz me:** flashcards from your questions, your definitions and Claude's practice questions, with a second round for the ones you missed
+- **Quiz me:** a 2-minute brain dump checked section by section, and flashcards from your sections, questions, definitions and Claude's practice questions, with a second round for the ones you missed
+- **What's new:** the sparkle button at the top lists each update
 - **Export:** copy your notes as Markdown
 
 ## Where it runs
@@ -50,7 +51,14 @@ Press **Enter** to add a note and **Shift+Enter** for a new line.
 - **Testing yourself beats rereading.** Retrieval practice led to at least 30% better scores on tests taken days later ([Edu Praxis](https://ei.study/edu-praxis)).
 - **Cornell-style structure.** The cue column and summary build self-testing into note-taking ([CASRAI](https://casrai.org/study-skills/cornell-notes)). Scribble puts timestamps in the margin and adds a summary and quiz.
 
-## Files
+## Weekly updates
 
-- `index.html` — the whole app in one file, no build step
-- `media/walkthrough.mp4` — screen recording of one lesson from start to quiz. The Claude summary step uses sample text.
+Every Friday at 3:20am (Jamaica time) Claude researches a new way to make Scribble better, builds one focused improvement, runs every check, and publishes it. The plan and rules are in [ROADMAP.md](ROADMAP.md); what changed and the sources used are in [CHANGELOG.md](CHANGELOG.md). Updates pause whenever the owner's weekly Claude usage is over 75%.
+
+## Working on it
+
+- Edit `src/app.html` (the whole app: styles, screens and logic in one file).
+- `python3 scripts/build.py` rebuilds `index.html` (this site) and `dist/artifact.html` (the claude.ai version).
+- `npm test` (or `bash tests/run.sh`) runs every check: script syntax and a full phone-sized walk-through in light and dark.
+- GitHub runs the checks on every push to `main` and checks the live site every morning at 5:47am Jamaica time. A failure emails the repo owner.
+- `media/walkthrough.mp4` is a screen recording of one lesson from start to quiz. The Claude summary step uses sample text.

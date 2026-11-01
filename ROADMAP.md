@@ -45,10 +45,11 @@ The working plan for the weekly update runs (Fridays, 3:20am Jamaica time, after
 - [ ] **Parking lot for stray thoughts.** A quick "Not now" button in Take notes that saves an off-topic thought (a to-do, a worry) to a separate list instead of the lesson, so it stops pulling attention. Research the evidence first (worry postponement, distraction lists for ADHD); ship only if it is reasonable.
 - [ ] **Move my data.** Copy and paste a backup code to move lessons between the GitHub Pages version (browser storage) and the claude.ai version (Claude account), like OMGym's "Back up / move my data". Validate before replacing; keep an undo.
 - [x] (2026-10-31, built in the daytime session) **Owner request: keyword search.** Home-screen search across all lessons (notes, titles, courses, summaries, brain dumps, Claude's summary) with highlighted hits that jump to the note, and a search box in Organize.
-- [ ] **Course filter** in the library once there are many lessons: filter by course and show "N to rewatch" across a course.
+- [x] (2026-10-31, built in the daytime session) **Owner request: home screen facelift.** "Pick up where you left off" with the next study step, lessons grouped by date or by course, study-step progress on each lesson, intro tucked into "How Scribble works".
+- [ ] **Course page:** tap a course heading (By course view) to see all its lessons, "N to rewatch" across the course, and (with the course export item) one export for the whole course.
 - [ ] **Text size** setting (Normal / Large, saved per device), like OMGym's; check every tab at 390 px.
 - [ ] **Desktop keyboard shortcuts** for Take notes (for example Ctrl+M for Missed that, Alt+1–6 for note types) with a small "?" list. Phones are unaffected.
-- [ ] Re-record the walkthrough video when the home screen or Quiz me changes enough that it looks out of date (fonts couldn't load in the recording environment on 26 Oct; use them if they can).
+- [ ] **Re-record the walkthrough video now** (the 2026-10-31 home screen facelift made it out of date): show the new home screen, Take notes, the brain dump, the answer box in Quiz me, search and export. Then re-record it again when the home screen or Quiz me changes enough that it looks out of date (fonts couldn't load in the recording environment on 26 Oct; use them if they can).
 
 ## Notes from runs
 - 2026-10-31 (daytime): The owner's real lessons are long (one has 153 notes) and some were typed without the lesson clock, so every time reads 00:00. Hide 00:00 times where they add nothing, and keep long lessons fast and easy to scan when building new features.

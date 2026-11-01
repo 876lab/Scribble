@@ -35,6 +35,7 @@ Press **Enter** to add a note and **Shift+Enter** for a new line.
 - **Organize:** reorder, indent, retype and edit notes; filter by type; edit the lesson title and course
 - **Summary:** automatic key points grouped by section, a space for your own summary, a list of moments to rewatch, and an optional summary from Claude with key terms, gaps and practice questions
 - **Quiz me:** a 2-minute brain dump checked section by section, and flashcards from your sections, questions, definitions and Claude's practice questions, with a second round for the ones you missed
+- **Home screen:** pick up where you left off with the next study step; lessons grouped by date or by course, each showing its progress (Notes, Summary, Brain dump, Quiz)
 - **Search:** find any word across all your lessons from the home screen (tap a match to jump to that note), or within one lesson in Organize
 - **What's new:** the sparkle button at the top lists each update
 - **Export:** save your notes as a PDF or Word (.docx) file, with video times, sections as headings, highlighted test notes and a Key terms table; or copy them as plain text

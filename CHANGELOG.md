@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-10-31 (daytime, owner request): Home screen facelift
+- Returning users (one or more lessons) get a working home screen instead of the intro: "Your notebook" with today's date and totals, "+ New lesson", search, then **Pick up where you left off** (the most recently used lesson, its study steps, and one button for the next step), then **Your lessons**.
+- **Next step** follows the study routine (`nextStep()`): no notes → Take notes; no brain dump → Start brain dump; missed sections → Review what I missed; not quizzed → Quiz me; all done → Quiz me again (quiz again tomorrow).
+- **Study steps** (`lessonSteps()`): Notes, Summary (own or Claude's), Brain dump, Quiz. Finishing a quiz round now records `quizAt` on the lesson (new field, default 0). Shown as labelled bars on the continue card and four small bars on each lesson card.
+- **Grouping:** By date (lesson date: Today, Yesterday, Last 7 days, then month and year, newest first) or By course (alphabetical, "No course" last; lessons in the order watched, numbered "Lesson 1, 2…", with lesson and note totals). The choice is remembered per device (`scribble.home.view`).
+- Lesson cards: course, title, date on the right, note count; ★ and rewatch counts only when above zero.
+- The intro video and the routine moved into a collapsed **How Scribble works** card (with the example-lesson button when there is no example). New users with no lessons still see the full intro.
+- Tests: 137 browser checks (was 119): next-step rules, date groups, quizAt, continue card (most recent lesson, steps, one main button, opens the right tab), date and course grouping with order and numbering, zero counts hidden, How Scribble works, remembered grouping, no sideways scrolling in light and dark.
+- The walkthrough video now shows the old home screen; re-record it (backlog item).
+
 ## 2026-10-31 (daytime, owner question): Type your answers in Quiz me
 - The owner asked where to write his answer: the card said "Say or write your answer" but there was no box. Each card now has a "Your answer" box under it (optional; kept while the round lasts, not saved). Show answer (or Ctrl/⌘+Enter in the box) shows "Your answer" above "From your notes" so the two can be compared; the next card starts with an empty box. Card prompt now reads "Type your answer below, or say it out loud. Then tap Show answer to check."
 - Section recall cards drop trailing punctuation from the section title ("Data Sources:" → "Data Sources") and leave out the time when it is 00:00 (notes typed without the clock running).

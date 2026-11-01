@@ -18,7 +18,7 @@ const URL_ = process.env.SITE || 'file://' + path.resolve(__dirname, '..', 'inde
   const lessons = () => page.evaluate(() => JSON.parse(localStorage.getItem('scribble.v1.lessons') || '[]'));
 
   await page.goto(URL_);
-  await page.waitForSelector('.hero');
+  await page.waitForSelector('.home');
 
   if (process.env.SITE) {
     for (const f of ['media/walkthrough.mp4', 'media/walkthrough-poster.jpg']) {
@@ -48,7 +48,7 @@ const URL_ = process.env.SITE || 'file://' + path.resolve(__dirname, '..', 'inde
   await page.screenshot({ path: OUT + '/news.png' });
   await page.keyboard.press('Escape');
   ok(await page.isHidden('#news'), 'Escape closes the panel');
-  await page.reload(); await page.waitForSelector('.hero');
+  await page.reload(); await page.waitForSelector('.home');
   ok(await page.isHidden('#newdot'), 'dot stays cleared after reload');
   await page.screenshot({ path: OUT + '/home.png', fullPage: true });
 
@@ -153,7 +153,7 @@ const URL_ = process.env.SITE || 'file://' + path.resolve(__dirname, '..', 'inde
   await page.fill('#quizAns', 'quick'); await page.press('#quizAns', 'Control+Enter');
   ok(await page.isVisible('.flash .mine >> text=quick'), 'Ctrl+Enter in the answer box shows the answer');
   await page.screenshot({ path: OUT + '/quiz-answer.png' });
-  await page.reload(); await page.waitForSelector('.hero'); await page.click('.lesson');
+  await page.reload(); await page.waitForSelector('.home'); await page.click('.lesson');
   await page.click('[data-tab=summary]'); await page.click('[data-tab=quiz]');
   ok(await page.isVisible('text=Last one') && await page.isVisible('text=See last check'), 'quiz tab remembers the last brain dump');
   await page.click('text=See last check');
@@ -285,8 +285,50 @@ const URL_ = process.env.SITE || 'file://' + path.resolve(__dirname, '..', 'inde
   await page.screenshot({ path: OUT + '/dump-compare-dark.png', fullPage: true });
   await page.click('[data-act=home]');
   await page.screenshot({ path: OUT + '/home-dark.png' });
-  await page.reload(); await page.waitForSelector('.hero');
+  await page.reload(); await page.waitForSelector('.home');
   ok(await page.locator('.lesson').count() === 2, 'lessons survive a reload');
+
+  // ---- Home screen for returning users ----
+  { const ns = await page.evaluate(() => { const { normalize, nextStep, dateGroup } = window.SCRIBBLE; const N = (id, tag, text) => ({ id, tag, text, level: 1, t: 0 });
+      const b = { id: 'b', title: 'B', notes: [N('s', 'section', 'S'), N('x', '', 'x')] };
+      const steps = [normalize({ id: 'a', title: 'A', notes: [] }), normalize(b), normalize({ ...b, dumpAt: 1, dumpMarks: { s: 'missed' } }), normalize({ ...b, dumpAt: 1 }), normalize({ ...b, dumpAt: 1, quizAt: 1 })].map(x => nextStep(x).tab + ':' + nextStep(x).btn);
+      const now = Date.now(); return { steps, groups: [dateGroup(now), dateGroup(now - 864e5), dateGroup(now - 3 * 864e5), dateGroup(now - 40 * 864e5)] }; });
+    ok(JSON.stringify(ns.steps) === JSON.stringify(['capture:Take notes', 'quiz:Start brain dump', 'quiz:Review what I missed', 'quiz:Quiz me', 'quiz:Quiz me again']), 'next step follows the study routine: ' + ns.steps.join(', '));
+    ok(ns.groups[0] === 'Today' && ns.groups[1] === 'Yesterday' && ns.groups[2] === 'Last 7 days' && /\d{4}$/.test(ns.groups[3]), 'date groups: ' + ns.groups.join(', ')); }
+  ok((await lessons()).find(x => x.example).quizAt > 0, 'finishing a quiz round is remembered');
+  await page.emulateMedia({ colorScheme: 'light' });
+  await page.evaluate(() => { const ls = JSON.parse(localStorage.getItem('scribble.v1.lessons')), now = Date.now();
+    ls.push({ id: 'old1', title: 'Market research basics', course: 'Business Strategy', createdAt: now - 40 * 864e5, updatedAt: now - 40 * 864e5, notes: [{ id: 'o1', text: 'Surveys and interviews', tag: '', level: 0, t: 0 }] });
+    ls.push({ id: 'old2', title: 'Pricing', course: 'Business Strategy', createdAt: now - 3 * 864e5, updatedAt: now - 3 * 864e5, notes: [] });
+    localStorage.setItem('scribble.v1.lessons', JSON.stringify(ls)); localStorage.removeItem('scribble.home.view'); });
+  await page.reload(); await page.waitForSelector('.home');
+  ok(await page.isHidden('.hero'), 'returning users skip the big intro');
+  ok(await page.isVisible('#continue'), 'continue card shows');
+  { const recent = (await lessons()).sort((a, b) => b.updatedAt - a.updatedAt)[0]; ok((await page.innerText('#contTitle')) === recent.title, 'continue card shows the most recently used lesson: ' + recent.title); }
+  ok(await page.locator('#continue .steps li').count() === 4 && await page.locator('#continue .next .btn.primary').count() === 1, 'continue card shows the four steps and one main button');
+  { const heads = await page.locator('.grp-h').allTextContents();
+    ok(heads[0].startsWith('Today') && heads.some(h => h.startsWith('Last 7 days')) && heads.some(h => /\d{4}/.test(h)), 'lessons grouped by date: ' + heads.join(' | ')); }
+  ok(await page.locator('.lesson').count() === 4, 'every lesson listed once');
+  ok(!(await page.locator('.lesson').allInnerTexts()).some(x => /\b0 ★/.test(x)), 'zero counts are hidden');
+  ok(await page.locator('#howCard').evaluate(d => !d.open) && await page.locator('#howCard #demoVideo').count() === 1, 'video and routine tucked into How Scribble works');
+  await page.screenshot({ path: OUT + '/home-returning.png', fullPage: true });
+  await page.click('#howCard summary'); ok(await page.isVisible('#demoVideo'), 'How Scribble works opens');
+  await page.click('[data-act=homeView][data-v=course]');
+  { const h = await page.locator('.grp-h').allTextContents(); ok(h.some(x => x.startsWith('Business Strategy')) && h.some(x => x.startsWith('BIO 101')), 'grouped by course: ' + h.join(' | '));
+    const bs = page.locator('.grp', { hasText: 'Business Strategy' }), titles = await bs.locator('.lesson .title').allInnerTexts();
+    ok(titles[0] === 'Market research basics' && titles[1] === 'Pricing' && (await bs.locator('.lnum').first().innerText()) === 'Lesson 1', 'course lessons in the order watched, numbered: ' + titles.join(', ')); }
+  await page.reload(); await page.waitForSelector('.home');
+  ok(await page.getAttribute('[data-act=homeView][data-v=course]', 'aria-selected') === 'true', 'grouping choice remembered on this device');
+  ok(!(await overflow()), 'home: no sideways scrolling');
+  await page.screenshot({ path: OUT + '/home-course.png', fullPage: true });
+  { const recent = (await lessons()).sort((a, b) => b.updatedAt - a.updatedAt)[0];
+    const tab = await page.evaluate(id => window.SCRIBBLE.nextStep(window.SCRIBBLE.normalize(JSON.parse(localStorage.getItem('scribble.v1.lessons')).find(x => x.id === id))).tab, recent.id);
+    await page.click('#continue .next .btn.primary');
+    ok(await page.getAttribute(`[data-tab=${tab}]`, 'aria-selected') === 'true', 'next-step button opens the right tab: ' + tab); }
+  await page.click('[data-act=home]');
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await page.screenshot({ path: OUT + '/home-returning-dark.png', fullPage: true });
+  ok(!(await overflow()), 'home dark: no sideways scrolling');
 
   ok(errors.length === 0, 'no page errors: ' + errors.join(' | '));
   await browser.close();

@@ -131,7 +131,51 @@ textarea.field{resize:vertical;line-height:1.5}
 .routine li::before{content:counter(r);width:26px;height:26px;border-radius:50%;background:var(--accent-soft);color:var(--accent);font-weight:800;display:grid;place-items:center;font-size:.85rem;font-family:var(--f-mono);font-variation-settings:"MONO" 1}
 .routine li p{margin:0;font-size:.95rem}
 .routine li b{display:block}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 .newform{display:grid;gap:var(--s3)}
+/* Home for returning users */
+.home-top{display:flex;align-items:flex-end;justify-content:space-between;gap:var(--s3);flex-wrap:wrap;padding-top:var(--s2)}
+.home-h{font-family:var(--f-display);font-variation-settings:"CASL" 1;font-weight:850;font-size:clamp(1.5rem,5vw,1.9rem);line-height:1.1;margin:0;letter-spacing:-.02em}
+.home-sub{margin:4px 0 0;color:var(--muted);font-size:.9rem}
+.cont{display:flex;flex-direction:column;gap:var(--s3);border:1.5px solid color-mix(in srgb,var(--accent) 35%,var(--rule))}
+.cont .eyebrow{font-size:.72rem;text-transform:uppercase;letter-spacing:.08em;color:var(--accent);font-weight:700}
+.cont h3{font-family:var(--f-display);font-variation-settings:"CASL" .5;font-weight:800;font-size:1.25rem;line-height:1.25;margin:2px 0 0;text-wrap:balance}
+.cont .meta{font-size:.85rem;color:var(--muted)}
+.steps{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;list-style:none;margin:0;padding:0}
+.steps li{display:flex;flex-direction:column;gap:5px;font-size:.74rem;font-weight:700;color:var(--muted);min-width:0}
+.steps li::before{content:"";height:6px;border-radius:99px;background:var(--rule)}
+.steps li.done{color:var(--ink)}
+.steps li.done::before{background:var(--accent)}
+.steps li.now{color:var(--ink)}
+.steps li.now::before{background:var(--hi)}
+.next{display:flex;flex-direction:column;gap:var(--s3);background:var(--paper);border-radius:12px;padding:var(--s3)}
+.next b{display:block;font-size:.98rem}
+.next span{font-size:.88rem;color:var(--muted)}
+.list-head{display:flex;align-items:center;justify-content:space-between;gap:var(--s3);flex-wrap:wrap}
+.list-head .label{margin:0}
+.seg2{display:inline-flex;background:var(--sheet);border:1px solid var(--rule);border-radius:999px;padding:3px;gap:2px}
+.seg2 button{border:0;background:none;border-radius:999px;padding:6px 14px;font-weight:700;font-size:.84rem;color:var(--muted);min-height:34px}
+.seg2 button[aria-selected="true"]{background:var(--ink);color:var(--paper)}
+.grp{display:flex;flex-direction:column;gap:var(--s2)}
+.grp-h{display:flex;align-items:baseline;gap:var(--s2);margin:var(--s2) 0 0;font-family:var(--f-display);font-variation-settings:"CASL" .5;font-weight:800;font-size:1rem}
+.grp-h span{font-family:var(--f-body);font-weight:400;font-size:.82rem;color:var(--muted)}
+.groups{display:flex;flex-direction:column;gap:var(--s4)}
+.lrow{display:flex;justify-content:space-between;align-items:flex-start;gap:var(--s3)}
+.lmain{min-width:0}
+.ldate{flex:none;font-size:.8rem;color:var(--muted);font-variant-numeric:tabular-nums;padding-top:2px}
+.lfoot{display:flex;justify-content:space-between;align-items:center;gap:var(--s3);flex-wrap:wrap}
+.dots{display:inline-grid;grid-auto-flow:column;gap:4px}
+.dots i{display:block;width:16px;height:5px;border-radius:99px;background:var(--rule)}
+.dots i.on{background:var(--accent)}
+.lnum{font-family:var(--f-mono);font-variation-settings:"MONO" 1;font-size:.72rem;color:var(--muted);font-weight:500;letter-spacing:0;text-transform:none}
+details.how{padding:0}
+details.how>summary{list-style:none;cursor:pointer;padding:var(--s4);display:flex;justify-content:space-between;align-items:center;gap:var(--s3);font-weight:700}
+details.how>summary::-webkit-details-marker{display:none}
+details.how>summary::after{content:"+";font-size:1.3rem;line-height:1;color:var(--muted)}
+details.how[open]>summary::after{content:"–"}
+details.how>summary small{display:block;font-weight:400;color:var(--muted);font-size:.84rem}
+.how-body{display:flex;flex-direction:column;gap:var(--s4);padding:0 var(--s4) var(--s4)}
+.how-body .demo,.how-body .routine{box-shadow:none;padding:0;background:none}
 .empty{text-align:center;padding:var(--s6) var(--s4)}
 .empty p{margin:var(--s2) auto var(--s4);max-width:40ch}
 
@@ -337,6 +381,12 @@ const CHIP_ORDER = ["key", "def", "ex", "q", "test", "section"];
 
 /* What's new: newest first. Each run adds one entry at the top (id = date + short slug). */
 const CHANGES = [
+  { id: "2026-10-31-home", d: "2026-10-31", t: "A tidier home screen", b: [
+    "“Pick up where you left off” shows your latest lesson and the next study step, with one button to do it.",
+    "Lessons are grouped by date (Today, Yesterday, Last 7 days, then by month), or by course in the order you watched them.",
+    "Each lesson shows its progress: Notes, Summary, Brain dump, Quiz.",
+    "The video and the routine moved into “How Scribble works” at the bottom."
+  ] },
   { id: "2026-10-31-answers", d: "2026-10-31", t: "Type your answers in Quiz me", b: [
     "Each quiz card now has a box to type your answer before you check it.",
     "Show answer puts your answer above the one from your notes, so you can compare them.",
@@ -380,7 +430,7 @@ const S = {
   nudgeMin: +(lsGet("scribble.nudge") ?? 5) || 0, lastNudgeAt: -1, nudgeOn: false,
   editingTime: false,
   aiBusy: false, aiErr: "", aiCtl: null,
-  search: "", lessonQuery: "", jumpTo: null,
+  search: "", lessonQuery: "", jumpTo: null, homeView: lsGet("scribble.home.view") === "course" ? "course" : "date",
   quiz: null, dump: null, newsSeen: lsGet(NEWS_KEY) || "",
   mode: "local", syncState: "", db: null, col: null, sample: null, downloads: null
 };
@@ -396,7 +446,8 @@ function normalize(l) {
     ai: l.ai && typeof l.ai === "object" ? l.ai : null,
     example: !!l.example,
     dump: typeof l.dump === "string" ? l.dump : "", dumpAt: +l.dumpAt || 0,
-    dumpMarks: l.dumpMarks && typeof l.dumpMarks === "object" && !Array.isArray(l.dumpMarks) ? l.dumpMarks : {}
+    dumpMarks: l.dumpMarks && typeof l.dumpMarks === "object" && !Array.isArray(l.dumpMarks) ? l.dumpMarks : {},
+    quizAt: +l.quizAt || 0
   };
 }
 function loadLocal() { try { (JSON.parse(lsGet(LS_KEY) || "[]") || []).forEach(l => l && l.id && S.lessons.set(l.id, normalize(l))); } catch {} }
@@ -670,36 +721,81 @@ function searchResultsHTML(q) {
   </li>`).join("")}</ul>`;
 }
 const SEARCH_ICON = `<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>`;
+/* ---------- home ---------- */
+const DAY_MS = 864e5;
+function dayStart(ms) { const d = new Date(ms); d.setHours(0, 0, 0, 0); return d.getTime(); }
+function dateGroup(ms, now = Date.now()) {
+  const t0 = dayStart(now), d = dayStart(ms);
+  if (d >= t0) return "Today";
+  if (d >= t0 - DAY_MS) return "Yesterday";
+  if (d >= t0 - 6 * DAY_MS) return "Last 7 days";
+  return new Date(ms).toLocaleDateString(undefined, { month: "long", year: "numeric" });
+}
+function lessonSteps(l) {
+  const notes = l.notes.some(n => n.tag !== "section");
+  const steps = [
+    { k: "notes", label: "Notes", done: notes },
+    { k: "summary", label: "Summary", done: !!(l.mySummary.trim() || l.ai) },
+    { k: "dump", label: "Brain dump", done: l.dumpAt > 0 },
+    { k: "quiz", label: "Quiz", done: l.quizAt > 0 }
+  ];
+  return steps;
+}
+function nextStep(l) {
+  const notes = l.notes.filter(n => n.tag !== "section").length;
+  const missed = sectionGroups(l).filter(g => l.dumpMarks[g.id] === "missed").length;
+  if (!notes) return { step: "notes", tab: "capture", btn: "Take notes", title: "Next: take notes", why: "Press Start when you press play on the video." };
+  if (!l.dumpAt) return { step: "dump", tab: "quiz", btn: "Start brain dump", title: "Next: brain dump", why: "Before your test, write what you remember for 2 minutes, then check it." };
+  if (missed) return { step: "dump", tab: "quiz", btn: "Review what I missed", title: `Next: review ${missed} missed section${missed > 1 ? "s" : ""}`, why: "From your last brain dump. Quiz yourself on just those." };
+  if (!l.quizAt) return { step: "quiz", tab: "quiz", btn: "Quiz me", title: "Next: quiz yourself", why: `${buildDeck(l).length} cards ready from your notes.` };
+  return { step: "", tab: "quiz", btn: "Quiz me again", title: "All steps done", why: "Quiz yourself again tomorrow to make it stick." };
+}
+function stepsHTML(l, now) {
+  return `<ol class="steps" aria-label="Study progress">${lessonSteps(l).map(st => `<li class="${st.done ? "done" : st.k === now ? "now" : ""}">${st.label}<span class="sr">${st.done ? " (done)" : ""}</span></li>`).join("")}</ol>`;
+}
+function continueHTML(l) {
+  const nx = nextStep(l), n = l.notes.filter(x => x.tag !== "section").length;
+  return `<section class="card cont" id="continue" aria-labelledby="contTitle">
+    <p class="label" style="margin:0">Pick up where you left off</p>
+    <div><div class="eyebrow">${esc(l.course || "No course")}</div><h3 id="contTitle">${esc(l.title)}</h3><div class="meta">${n} note${n === 1 ? "" : "s"} · ${esc(fmtDate(l.createdAt))}</div></div>
+    ${stepsHTML(l, nx.step)}
+    <div class="next"><div><b>${esc(nx.title)}</b><span>${esc(nx.why)}</span></div>
+      <div class="row-wrap"><button class="btn primary" data-act="open" data-id="${l.id}" data-tab="${nx.tab}">${esc(nx.btn)}</button>${nx.tab !== "organize" ? `<button class="btn" data-act="open" data-id="${l.id}" data-tab="organize">Open notes</button>` : ""}</div></div>
+  </section>`;
+}
+function lessonCard(l, eyebrow) {
+  const notes = l.notes.filter(n => n.tag !== "section");
+  const star = notes.filter(n => n.tag === "test").length, rw = notes.filter(n => n.tag === "rewatch").length;
+  const st = lessonSteps(l);
+  return `<li><button class="card lesson" data-act="open" data-id="${l.id}">
+    <div class="lrow"><div class="lmain"><div class="eyebrow">${eyebrow}</div><div class="title">${esc(l.title)}</div></div><div class="ldate">${esc(fmtDate(l.createdAt))}</div></div>
+    <div class="lfoot"><div class="stats"><span><b>${notes.length}</b> note${notes.length === 1 ? "" : "s"}</span>${star ? `<span><b>${star}</b> ★ for the test</span>` : ""}${rw ? `<span class="tag rewatch" style="vertical-align:0">${rw} to rewatch</span>` : ""}</div>
+      <span class="dots" role="img" aria-label="Done: ${st.filter(x => x.done).map(x => x.label).join(", ") || "nothing yet"}">${st.map(x => `<i class="${x.done ? "on" : ""}"></i>`).join("")}</span></div>
+  </button></li>`;
+}
+function groupsHTML(ls) {
+  if (S.homeView === "course") {
+    const by = new Map();
+    ls.forEach(l => { const k = l.course.trim() || "No course"; if (!by.has(k)) by.set(k, []); by.get(k).push(l); });
+    const keys = [...by.keys()].sort((a, b) => a === "No course" ? 1 : b === "No course" ? -1 : a.localeCompare(b));
+    return keys.map(k => {
+      const list = by.get(k).sort((a, b) => a.createdAt - b.createdAt), notes = list.reduce((a, l) => a + l.notes.filter(n => n.tag !== "section").length, 0);
+      return `<section class="grp"><h3 class="grp-h">${esc(k)} <span>${list.length} lesson${list.length === 1 ? "" : "s"} · ${notes} notes</span></h3><ul class="lesson-list">${list.map((l, i) => lessonCard(l, `<span class="lnum">Lesson ${i + 1}</span>`)).join("")}</ul></section>`;
+    }).join("");
+  }
+  const sorted = [...ls].sort((a, b) => b.createdAt - a.createdAt), groups = [];
+  sorted.forEach(l => { const g = dateGroup(l.createdAt); let last = groups[groups.length - 1]; if (!last || last.name !== g) groups.push(last = { name: g, items: [] }); last.items.push(l); });
+  return groups.map(g => `<section class="grp"><h3 class="grp-h">${esc(g.name)} <span>${g.items.length}</span></h3><ul class="lesson-list">${g.items.map(l => lessonCard(l, esc(l.course || "No course"))).join("")}</ul></section>`).join("");
+}
 function libListHTML(ls) {
   if (S.search.trim()) return searchResultsHTML(S.search);
-  return `<section><p class="label">Your lessons</p><ul class="lesson-list">${ls.map(l => {
-    const notes = l.notes.filter(n => n.tag !== "section");
-    const star = notes.filter(n => n.tag === "test").length, rw = notes.filter(n => n.tag === "rewatch").length;
-    return `<li><button class="card lesson" data-act="open" data-id="${l.id}">
-      <div class="eyebrow">${esc(l.course || "No course")}</div>
-      <div class="title">${esc(l.title)}</div>
-      <div class="stats"><span><b>${notes.length}</b> notes</span><span><b>${star}</b> ★ for the test</span>${rw ? `<span class="tag rewatch" style="vertical-align:0">${rw} to rewatch</span>` : ""}<span>${l.mySummary.trim() ? "Summary written" : "No summary yet"}</span><span>${fmtDate(l.updatedAt)}</span></div>
-    </button></li>`;
-  }).join("")}</ul></section>`;
+  const recent = [...ls].sort((a, b) => b.updatedAt - a.updatedAt)[0];
+  return `<div class="stack">${recent ? continueHTML(recent) : ""}
+    <div class="list-head"><p class="label">Your lessons</p><div class="seg2" role="tablist" aria-label="Group lessons"><button role="tab" data-act="homeView" data-v="date" aria-selected="${S.homeView !== "course"}">By date</button><button role="tab" data-act="homeView" data-v="course" aria-selected="${S.homeView === "course"}">By course</button></div></div>
+    <div class="groups" id="groups">${groupsHTML(ls)}</div></div>`;
 }
-
-function libraryHTML() {
-  const ls = [...S.lessons.values()].sort((a, b) => b.updatedAt - a.updatedAt);
-  const form = S.newOpen ? `<form class="card newform" id="newForm">
-      <h3 class="h">New lesson</h3>
-      <label class="stack" style="gap:4px"><span class="label" style="margin:0">Lesson title</span><input class="field" id="nfTitle" placeholder="e.g. Week 4 — Supply and demand" required></label>
-      <label class="stack" style="gap:4px"><span class="label" style="margin:0">Course</span><input class="field" id="nfCourse" placeholder="e.g. ECON 101" list="courses"></label>
-      <datalist id="courses">${[...new Set(ls.map(l => l.course).filter(Boolean))].map(c => `<option value="${esc(c)}">`).join("")}</datalist>
-      <div class="row-wrap"><button class="btn primary" type="submit">Start taking notes</button><button class="btn ghost" type="button" data-act="cancelNew">Cancel</button></div>
-    </form>` : `<div class="row-wrap"><button class="btn primary" data-act="newOpen">+ New lesson</button>${ls.some(l => l.example) ? "" : `<button class="btn" data-act="example">Open an example lesson</button>`}</div>`;
-  return `<div class="stack">
-    <section class="hero"><h2>Watch first. <mark>Pause</mark>, then write.</h2>
-      <p>A notebook built for video lessons: one tap stamps the time, a gentle reminder tells you when to pause, and everything turns into a summary and a quiz before your test.</p></section>
-    ${form}
-    ${ls.length ? `<div class="searchbox" role="search">${SEARCH_ICON}<input type="search" id="libSearch" placeholder="Search all notes" aria-label="Search all notes" value="${esc(S.search)}" autocomplete="off" enterkeyhint="search"><button class="clear" data-act="clearSearch" data-for="libSearch" aria-label="Clear search" ${S.search ? "" : "hidden"}>✕</button></div>
-    <div id="libBody" aria-live="polite">${libListHTML(ls)}</div>` :
-      `<section class="card empty"><h3 class="h">No lessons yet</h3><p class="muted">Each video you watch becomes a lesson. Start one when you press play, or open the example to see how a finished set of notes looks.</p></section>`}
-    <section class="card demo"><p class="label" style="margin:0">See how it works</p>
+function howHTML(ls, open) {
+  return `<section class="card demo"><p class="label" style="margin:0">See how it works</p>
       <video id="demoVideo" controls playsinline preload="metadata" poster="media/walkthrough-poster.jpg" aria-label="Walkthrough of Scribble, one lesson from start to quiz"><source src="media/walkthrough.mp4" type="video/mp4"></video>
       <p>About 90 seconds, one lesson from start to quiz. The summary step shows sample text.</p></section>
     <section class="card routine"><p class="label">The routine for each video</p><ol>
@@ -707,7 +803,32 @@ function libraryHTML() {
       <li><p><b>Pause when the reminder shows.</b>Stop the video and write the main point in one line. Don't type while it's talking.</p></li>
       <li><p><b>Lost the thread? Tap “Missed that”.</b>It marks the time to rewatch so you can keep going instead of falling behind.</p></li>
       <li><p><b>Before the test, test yourself.</b>In Quiz me, do the 2-minute brain dump: write everything you remember, then check it against your notes.</p></li>
-    </ol></section>
+    </ol></section>${open ? "" : (ls.some(l => l.example) ? "" : `<div class="row-wrap"><button class="btn" data-act="example">Open an example lesson</button></div>`)}`;
+}
+
+function libraryHTML() {
+  const ls = [...S.lessons.values()].sort((a, b) => b.updatedAt - a.updatedAt);
+  const form = `<form class="card newform" id="newForm">
+      <h3 class="h">New lesson</h3>
+      <label class="stack" style="gap:4px"><span class="label" style="margin:0">Lesson title</span><input class="field" id="nfTitle" placeholder="e.g. Week 4 — Supply and demand" required></label>
+      <label class="stack" style="gap:4px"><span class="label" style="margin:0">Course</span><input class="field" id="nfCourse" placeholder="e.g. ECON 101" list="courses"></label>
+      <datalist id="courses">${[...new Set(ls.map(l => l.course).filter(Boolean))].map(c => `<option value="${esc(c)}">`).join("")}</datalist>
+      <div class="row-wrap"><button class="btn primary" type="submit">Start taking notes</button><button class="btn ghost" type="button" data-act="cancelNew">Cancel</button></div>
+    </form>`;
+  if (!ls.length) return `<div class="stack home">
+    <section class="hero"><h2>Watch first. <mark>Pause</mark>, then write.</h2>
+      <p>A notebook built for video lessons: one tap stamps the time, a gentle reminder tells you when to pause, and everything turns into a summary and a quiz before your test.</p></section>
+    ${S.newOpen ? form : `<div class="row-wrap"><button class="btn primary" data-act="newOpen">+ New lesson</button><button class="btn" data-act="example">Open an example lesson</button></div>`}
+    <section class="card empty"><h3 class="h">No lessons yet</h3><p class="muted">Each video you watch becomes a lesson. Start one when you press play, or open the example to see how a finished set of notes looks.</p></section>
+    ${howHTML(ls, true)}
+  </div>`;
+  const total = ls.reduce((a, l) => a + l.notes.filter(n => n.tag !== "section").length, 0);
+  return `<div class="stack home">
+    <div class="home-top"><div><h2 class="home-h">Your notebook</h2><p class="home-sub">${esc(new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" }))} · ${ls.length} lesson${ls.length === 1 ? "" : "s"} · ${total} notes</p></div>${S.newOpen ? "" : `<button class="btn primary" data-act="newOpen">+ New lesson</button>`}</div>
+    ${S.newOpen ? form : ""}
+    <div class="searchbox" role="search">${SEARCH_ICON}<input type="search" id="libSearch" placeholder="Search all notes" aria-label="Search all notes" value="${esc(S.search)}" autocomplete="off" enterkeyhint="search"><button class="clear" data-act="clearSearch" data-for="libSearch" aria-label="Clear search" ${S.search ? "" : "hidden"}>✕</button></div>
+    <div id="libBody" aria-live="polite">${libListHTML(ls)}</div>
+    <details class="card how" id="howCard"><summary><span>How Scribble works<small>A 90-second video and the routine for each lesson</small></span></summary><div class="how-body">${howHTML(ls, false)}</div></details>
   </div>`;
 }
 
@@ -1324,7 +1445,8 @@ document.addEventListener("click", async e => {
   const act = el.dataset.act, l = cur();
   switch (act) {
     case "home": goLibrary(); break;
-    case "open": openLesson(el.dataset.id, (S.lessons.get(el.dataset.id)?.notes.length ? "organize" : "capture")); break;
+    case "open": openLesson(el.dataset.id, el.dataset.tab || (S.lessons.get(el.dataset.id)?.notes.length ? "organize" : "capture")); break;
+    case "homeView": S.homeView = el.dataset.v === "course" ? "course" : "date"; lsSet("scribble.home.view", S.homeView); { const g = $("#groups"); if (g) g.innerHTML = groupsHTML([...S.lessons.values()]); document.querySelectorAll(".seg2 button").forEach(b => b.setAttribute("aria-selected", String(b.dataset.v === S.homeView))); } break;
     case "newOpen": S.newOpen = true; render(); $("#nfTitle")?.focus(); break;
     case "cancelNew": S.newOpen = false; render(); break;
     case "example": { const x = exampleLesson(); openLesson(x.id, "organize"); break; }
@@ -1389,7 +1511,7 @@ document.addEventListener("click", async e => {
     case "flip": if (!S.quiz.flipped) { S.quiz.flipped = true; render(); } break;
     case "grade": {
       const q = S.quiz; if (el.dataset.g === "1") q.got++; else q.missed.push(q.order[q.i]);
-      q.i++; q.flipped = false; if (q.i >= q.order.length) q.done = true; render(); break;
+      q.i++; q.flipped = false; if (q.i >= q.order.length) { q.done = true; if (l) { l.quizAt = Date.now(); persist(l); } } render(); break;
     }
     case "quizRestart": S.quiz = null; render(); break;
     case "news": openNews(); break;
@@ -1496,7 +1618,7 @@ document.addEventListener("focusout", e => {
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && S.clock.running) { try { navigator.wakeLock?.request("screen").then(w => S.wake = w).catch(() => {}); } catch {} } });
 
 /* Read-only hook for the automated checks in tests/. */
-window.SCRIBBLE = Object.freeze({ CHANGES, searchTerms, matchesAll, hl, searchLessons, sectionGroups, buildDeck, normalize, toMarkdown, glossary, exportModel, makePDF, makeDOCX, toWin, crc32 });
+window.SCRIBBLE = Object.freeze({ CHANGES, dateGroup, nextStep, lessonSteps, searchTerms, matchesAll, hl, searchLessons, sectionGroups, buildDeck, normalize, toMarkdown, glossary, exportModel, makePDF, makeDOCX, toWin, crc32 });
 
 /* ---------- boot ---------- */
 loadLocal();

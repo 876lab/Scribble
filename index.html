@@ -251,6 +251,28 @@ textarea.field{resize:vertical;line-height:1.5}
 .seg{display:flex;gap:6px;flex-wrap:wrap}
 .seg .btn[aria-pressed="true"].ok{background:var(--ok);border-color:var(--ok);color:var(--sheet)}
 .seg .btn[aria-pressed="true"].no{background:var(--danger);border-color:var(--danger);color:var(--sheet)}
+.fmt-grid{display:grid;grid-template-columns:1fr 1fr;gap:var(--s2)}
+@media (max-width:420px){.fmt-grid{grid-template-columns:1fr}}
+.fmt{display:flex;align-items:center;gap:var(--s3);text-align:left;border:1px solid var(--rule);background:var(--sheet);border-radius:14px;padding:var(--s3);min-height:64px;transition:transform .08s}
+.fmt:active{transform:scale(.98)}
+.fmt[disabled]{opacity:.5}
+.fmt b{display:block;font-size:.98rem}
+.fmt small{display:block;color:var(--muted);font-size:.8rem}
+.fmt-badge{flex:none;width:38px;height:44px;border-radius:6px;display:grid;place-items:center;font-weight:800;font-size:.78rem;letter-spacing:.04em;color:#fff}
+.fmt-badge.pdf{background:#C4302B}
+.fmt-badge.doc{background:#2B579A;font-size:1.05rem}
+.check{display:flex;gap:var(--s2);align-items:flex-start;font-size:.9rem;line-height:1.35}
+.check input{margin-top:3px;width:18px;height:18px;flex:none;accent-color:var(--accent)}
+.more summary{cursor:pointer;font-weight:700;font-size:.9rem;color:var(--accent);padding:4px 0}
+.more[open]{display:flex;flex-direction:column;gap:var(--s2)}
+.more textarea{min-height:160px}
+.export{overflow-y:auto}
+.gloss-wrap{overflow-x:auto}
+.gloss{width:100%;border-collapse:collapse;font-size:.92rem}
+.gloss th,.gloss td{border:1px solid var(--rule);padding:8px 10px;text-align:left;vertical-align:top}
+.gloss th{background:var(--accent-soft);font-size:.75rem;text-transform:uppercase;letter-spacing:.07em}
+.gloss td:first-child{font-weight:700;width:34%}
+.gloss .via{font-size:.72rem;color:var(--muted);font-weight:400;display:block}
 .overlay{position:fixed;inset:0;z-index:40;background:rgba(0,0,0,.45);display:grid;place-items:center;padding:max(16px,env(safe-area-inset-left,0px))}
 .overlay .card{width:min(560px,100%);max-height:80vh;min-height:0;display:flex;flex-direction:column;gap:var(--s3)}
 .overlay textarea{flex:1;min-height:240px;font-family:var(--f-mono);font-variation-settings:"MONO" 1;font-size:.82rem}
@@ -288,6 +310,11 @@ const CHIP_ORDER = ["key", "def", "ex", "q", "test", "section"];
 
 /* What's new: newest first. Each run adds one entry at the top (id = date + short slug). */
 const CHANGES = [
+  { id: "2026-10-31-export", d: "2026-10-31", t: "Export as PDF or Word", b: [
+    "Export notes as a PDF or a Word file (.docx) from Organize or Summary. Plain text is still there too.",
+    "Each note keeps its video time, sections become headings, ★ test notes are highlighted.",
+    "Definitions written as “term: meaning” now make a Key terms table, in the Summary tab and in the files."
+  ] },
   { id: "2026-10-30-recall", d: "2026-10-30", t: "Brain dump and section cards before your test", b: [
     "Quiz me now starts with a 2-minute brain dump: cover your notes, write everything you remember, then check it section by section.",
     "Mark each section “I had this” or “Missed”, then quiz yourself on just the ones you missed.",
@@ -652,7 +679,7 @@ function organizeHTML(l) {
     <div class="filters" role="group" aria-label="Show">${FILTERS.map(([k, label]) => `<button class="chip" data-act="filter" data-f="${k}" aria-pressed="${S.filter === k}">${label}</button>`).join("")}</div>
     <p class="muted" style="margin:0;font-size:.88rem">Tap a note to move, indent, retype or edit it.${S.filter !== "all" ? " Clear the filter to reorder." : ""}</p>
     <section class="sheet"><ol class="notes">${list}</ol></section>
-    <div class="row-wrap"><button class="btn small" data-act="insert" data-kind="section">+ Section</button><button class="btn small" data-act="insert" data-kind="note">+ Note</button><button class="btn small" data-act="export">Copy / save notes</button></div>
+    <div class="row-wrap"><button class="btn small" data-act="insert" data-kind="section">+ Section</button><button class="btn small" data-act="insert" data-kind="note">+ Note</button><button class="btn small" data-act="export">Export (PDF, Word)</button></div>
     <section class="confirm">${S.confirmDelete ? `<span>Delete “${esc(l.title)}” and all its notes?</span><button class="btn small danger" data-act="deleteLesson">Delete</button><button class="btn small ghost" data-act="cancelDelete">Keep it</button>` : `<button class="btn small ghost warn" data-act="askDelete">Delete lesson</button>`}</section>
     ${S.selected && !S.editingId ? `<div class="pad-bottom"></div>` : ""}
   </div>${S.selected && !S.editingId ? actionBarHTML(l) : ""}`;
@@ -714,8 +741,9 @@ function summaryHTML(l) {
       ${kp.length ? kp.map(g => `<div class="kp-sec">${g.title ? `<h4>${esc(g.title)}</h4>` : ""}<ul>${g.items.map(n => `<li>${n.tag === "test" ? "<b>★</b> " : ""}${esc(n.text)} <span class="muted mono" style="font-size:.75rem">${fmt(n.t)}</span></li>`).join("")}</ul></div>`).join("") :
         `<p class="muted" style="margin:0">Mark notes as Key idea, Definition or ★ On the test and they collect here, grouped by section.</p>`}
     </section>
+    ${(() => { const g = glossary(l); return g.length ? `<section class="card"><p class="label">Key terms</p><div class="gloss-wrap"><table class="gloss"><thead><tr><th scope="col">Term</th><th scope="col">Meaning</th></tr></thead><tbody>${g.map(r => `<tr><td>${esc(r.term)}${r.src === "claude" ? `<span class="via">from Claude's summary</span>` : ""}</td><td>${esc(r.meaning)}</td></tr>`).join("")}</tbody></table></div><p class="muted" style="margin:var(--s2) 0 0;font-size:.84rem">Built from notes marked Definition and written as “term: meaning”.</p></section>` : ""; })()}
     ${rw.length ? `<section class="card"><p class="label">Rewatch before the test</p><ul style="margin:0;padding-left:1.2em">${rw.map(n => `<li><span class="mono">${fmt(n.t)}</span> — ${esc(n.text)}</li>`).join("")}</ul></section>` : ""}
-    <div class="row-wrap"><button class="btn" data-act="export">Copy / save notes</button></div>
+    <div class="row-wrap"><button class="btn" data-act="export">Export notes (PDF, Word)</button></div>
   </div>`;
 }
 
@@ -882,7 +910,262 @@ Rules: use only what is in the notes; do not add outside facts. Up to 8 terms. W
   S.aiBusy = false; S.aiCtl = null; render();
 }
 
-/* ---------- export ---------- */
+
+/* ---------- export: PDF and Word files, built here with no libraries (works offline) ---------- */
+/* One document model feeds both files: title, meta, notes (with sections), key terms table, summaries, questions. */
+function glossary(l) {
+  const rows = [], seen = new Set();
+  const add = (term, meaning, src) => { const k = term.trim().toLowerCase(); if (!k || seen.has(k)) return; seen.add(k); rows.push({ term: term.trim(), meaning: meaning.trim(), src }); };
+  l.notes.forEach(n => { if (n.tag !== "def") return; const m = n.text.match(/^(.{1,80}?)\s*(?::|=| — | - )\s*([\s\S]+)$/); if (m) add(m[1], m[2], "notes"); });
+  (l.ai?.terms || []).forEach(t => t && t.term && add(String(t.term), String(t.meaning || ""), "claude"));
+  return rows;
+}
+function exportModel(l, extras = true) {
+  const hasSections = l.notes.some(n => n.tag === "section");
+  const B = [];
+  B.push({ k: "title", t: l.title });
+  B.push({ k: "meta", t: [l.course, new Date(l.createdAt).toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" }), l.elapsed ? "Video time " + fmt(l.elapsed) : ""].filter(Boolean).join("  ·  ") });
+  if (!l.notes.length) B.push({ k: "para", t: "No notes yet." });
+  l.notes.forEach(n => {
+    if (n.tag === "section") { B.push({ k: "h2", t: n.text, ts: fmt(n.t) }); return; }
+    B.push({ k: "note", ts: fmt(n.t), tag: n.tag, label: n.tag ? TAGS[n.tag].label : "", text: n.text, level: Math.max(0, n.level - (hasSections ? 1 : 0)) });
+  });
+  const terms = glossary(l);
+  if (terms.length) { B.push({ k: "h1", t: "Key terms" }); B.push({ k: "table", head: ["Term", "Meaning"], rows: terms.map(r => [r.term, r.meaning]) }); }
+  if (extras) {
+    if (l.mySummary.trim()) { B.push({ k: "h1", t: "My summary" }); B.push({ k: "para", t: l.mySummary.trim() }); }
+    if (l.dump.trim()) { B.push({ k: "h1", t: "Brain dump" + (l.dumpAt ? " (" + new Date(l.dumpAt).toLocaleDateString() + ")" : "") }); B.push({ k: "para", t: l.dump.trim() }); }
+    if (l.ai?.summary?.length) { B.push({ k: "h1", t: "Claude's summary" }); B.push({ k: "bullets", items: l.ai.summary.map(String) }); }
+    if (l.ai?.questions?.length) { B.push({ k: "h1", t: "Practice questions" }); B.push({ k: "qa", items: l.ai.questions.map(q => ({ q: String(q.q), a: String(q.a || "") })) }); }
+    const rw = l.notes.filter(n => n.tag === "rewatch");
+    if (rw.length) { B.push({ k: "h1", t: "Rewatch before the test" }); B.push({ k: "bullets", items: rw.map(n => fmt(n.t) + "  " + n.text) }); }
+  }
+  return B;
+}
+function exportName(l, ext) { return ((l.title || "notes").replace(/[^\w\- ]+/g, "").replace(/\s+/g, " ").trim().slice(0, 60) || "notes") + "." + ext; }
+
+/* --- PDF --- Standard fonts (Helvetica, Courier) in WinAnsi encoding; widths from the Adobe font metrics. */
+const PDF_W = { R: [278, 278, 355, 556, 556, 889, 667, 191, 333, 333, 389, 584, 278, 333, 278, 278, 556, 556, 556, 556, 556, 556, 556, 556, 556, 556, 278, 278, 584, 584, 584, 556, 1015, 667, 667, 722, 722, 667, 611, 778, 722, 278, 500, 667, 556, 833, 722, 778, 667, 778, 722, 667, 611, 722, 667, 944, 667, 667, 611, 278, 278, 278, 469, 556, 333, 556, 556, 500, 556, 556, 278, 556, 556, 222, 222, 500, 222, 833, 556, 556, 556, 556, 333, 500, 278, 556, 500, 722, 500, 500, 500, 334, 260, 334, 584, 350, 556, 350, 222, 556, 333, 1000, 556, 556, 333, 1000, 667, 333, 1000, 350, 611, 350, 350, 222, 222, 333, 333, 350, 556, 1000, 333, 1000, 500, 333, 944, 350, 500, 667, 278, 333, 556, 556, 556, 556, 260, 556, 333, 737, 370, 556, 584, 333, 737, 333, 400, 584, 333, 333, 333, 556, 537, 278, 333, 333, 365, 556, 834, 834, 834, 611, 667, 667, 667, 667, 667, 667, 1000, 722, 667, 667, 667, 667, 278, 278, 278, 278, 722, 722, 778, 778, 778, 778, 778, 584, 778, 722, 722, 722, 722, 667, 667, 611, 556, 556, 556, 556, 556, 556, 889, 500, 556, 556, 556, 556, 278, 278, 278, 278, 556, 556, 556, 556, 556, 556, 556, 584, 611, 556, 556, 556, 556, 500, 556, 500], B: [278, 333, 474, 556, 556, 889, 722, 238, 333, 333, 389, 584, 278, 333, 278, 278, 556, 556, 556, 556, 556, 556, 556, 556, 556, 556, 333, 333, 584, 584, 584, 611, 975, 722, 722, 722, 722, 667, 611, 778, 722, 278, 556, 722, 611, 833, 722, 778, 667, 778, 722, 667, 611, 722, 667, 944, 667, 667, 611, 333, 278, 333, 584, 556, 333, 556, 611, 556, 611, 556, 333, 611, 611, 278, 278, 556, 278, 889, 611, 611, 611, 611, 389, 556, 333, 611, 556, 778, 556, 556, 500, 389, 280, 389, 584, 350, 556, 350, 278, 556, 500, 1000, 556, 556, 333, 1000, 667, 333, 1000, 350, 611, 350, 350, 278, 278, 500, 500, 350, 556, 1000, 333, 1000, 556, 333, 944, 350, 500, 667, 278, 333, 556, 556, 556, 556, 280, 556, 333, 737, 370, 556, 584, 333, 737, 333, 400, 584, 333, 333, 333, 611, 556, 278, 333, 333, 365, 556, 834, 834, 834, 611, 722, 722, 722, 722, 722, 722, 1000, 722, 667, 667, 667, 667, 278, 278, 278, 278, 722, 722, 778, 778, 778, 778, 778, 584, 778, 722, 722, 722, 722, 667, 667, 611, 556, 556, 556, 556, 556, 556, 889, 556, 556, 556, 556, 556, 278, 278, 278, 278, 611, 611, 611, 611, 611, 611, 611, 584, 611, 611, 611, 611, 611, 556, 611, 556] };
+const WIN_MAP = { 0x20AC: 0x80, 0x201A: 0x82, 0x0192: 0x83, 0x201E: 0x84, 0x2026: 0x85, 0x2020: 0x86, 0x2021: 0x87, 0x02C6: 0x88, 0x2030: 0x89, 0x0160: 0x8A, 0x2039: 0x8B, 0x0152: 0x8C, 0x017D: 0x8E, 0x2018: 0x91, 0x2019: 0x92, 0x201C: 0x93, 0x201D: 0x94, 0x2022: 0x95, 0x2013: 0x96, 0x2014: 0x97, 0x02DC: 0x98, 0x2122: 0x99, 0x0161: 0x9A, 0x203A: 0x9B, 0x0153: 0x9C, 0x017E: 0x9E, 0x0178: 0x9F };
+const WIN_SUB = { "★": "*", "☆": "*", "→": "->", "←": "<-", "⇒": "=>", "↑": "^", "↓": "v", "⟲": "", "✓": "", "✔": "", "✗": "x", "✘": "x", "≈": "~", "≤": "<=", "≥": ">=", "≠": "!=", "−": "-", "μ": "µ", " ": " ", "\t": "    " };
+function toWin(str) {
+  let out = "";
+  for (const ch of String(str).normalize("NFC")) {
+    const c = ch.codePointAt(0);
+    if ((c >= 32 && c < 127) || (c >= 0xA0 && c <= 0xFF)) out += ch;
+    else if (WIN_MAP[c]) out += String.fromCharCode(WIN_MAP[c]);
+    else if (ch in WIN_SUB) out += WIN_SUB[ch];
+    else { const base = ch.normalize("NFKD").replace(/[̀-ͯ]/g, ""); out += [...base].every(x => x.codePointAt(0) < 256) && base ? base : "?"; }
+  }
+  return out;
+}
+function pdfWidth(s, f, size) { if (f === "M") return s.length * 600 * size / 1000; const t = PDF_W[f === "B" ? "B" : "R"]; let w = 0; for (let i = 0; i < s.length; i++) { const c = s.charCodeAt(i); w += c >= 32 ? t[c - 32] : 0; } return w * size / 1000; }
+function makePDF(l, extras = true) {
+  const PW = 612, PH = 792, M = 54, BOT = 64, TSW = 40, INK = "0.075 0.125 0.231", MUTE = "0.37 0.42 0.52", RULE = "0.82 0.85 0.91";
+  const TAGC = { key: "0.153 0.278 0.780", def: "0.071 0.502 0.353", ex: "0.455 0.275 0.745", q: "0.714 0.325 0.063", test: "0.478 0.369 0", rewatch: "0.702 0.137 0.251" };
+  const pages = []; let ops, y;
+  const newPage = () => { ops = []; pages.push(ops); y = PH - M; };
+  newPage();
+  const pesc = s => s.replace(/\\/g, "\\\\").replace(/\(/g, "\\(").replace(/\)/g, "\\)");
+  const FN = { R: "F1", B: "F2", I: "F3", M: "F4" };
+  const txt = (x, yy, s, f, size, color) => { if (s) ops.push(`BT /${FN[f]} ${size} Tf ${color} rg ${x.toFixed(2)} ${yy.toFixed(2)} Td (${pesc(s)}) Tj ET`); };
+  const line = (x1, y1, x2, y2, color, w = 0.6) => ops.push(`${color} RG ${w} w ${x1.toFixed(2)} ${y1.toFixed(2)} m ${x2.toFixed(2)} ${y2.toFixed(2)} l S`);
+  const rect = (x, yy, w, h, color) => ops.push(`${color} rg ${x.toFixed(2)} ${yy.toFixed(2)} ${w.toFixed(2)} ${h.toFixed(2)} re f`);
+  const need = h => { if (y - h < BOT) { newPage(); return true; } return false; };
+  // Wrap runs [{s,f,color}] to a width; returns lines of runs. Explicit newlines start new lines.
+  function wrap(runs, width, size) {
+    const lines = [[]]; let lw = 0;
+    const push = (s, f, color) => { const L = lines[lines.length - 1]; const last = L[L.length - 1]; if (last && last.f === f && last.color === color) last.s += s; else L.push({ s, f, color }); lw += pdfWidth(s, f, size); };
+    runs.forEach(r => {
+      String(r.s).split("\n").forEach((part, pi) => {
+        if (pi > 0) { lines.push([]); lw = 0; }
+        toWin(part).split(/(\s+)/).forEach(tok => {
+          if (!tok) return;
+          const w = pdfWidth(tok, r.f, size);
+          if (/^\s+$/.test(tok)) { if (lw > 0) push(" ", r.f, r.color); return; }
+          if (lw + w > width && lw > 0) { const L = lines[lines.length - 1]; if (L.length) L[L.length - 1].s = L[L.length - 1].s.replace(/\s+$/, ""); lines.push([]); lw = 0; }
+          if (w > width) { let chunk = ""; for (const ch of tok) { if (pdfWidth(chunk + ch, r.f, size) > width - lw && chunk) { push(chunk, r.f, r.color); lines.push([]); lw = 0; chunk = ""; } chunk += ch; } if (chunk) push(chunk, r.f, r.color); }
+          else push(tok, r.f, r.color);
+        });
+      });
+    });
+    return lines;
+  }
+  const drawLines = (lines, x, size, lead, hl) => {
+    lines.forEach(L => {
+      if (need(lead)) {}
+      y -= lead;
+      if (hl) rect(x - 2, y - size * 0.28, Math.min(L.reduce((a, r) => a + pdfWidth(r.s, r.f, size), 0) + 4, PW - M - x + 2), size * 1.18, "1 0.937 0.6");
+      let cx = x; L.forEach(r => { txt(cx, y, r.s, r.f, size, r.color); cx += pdfWidth(r.s, r.f, size); });
+    });
+  };
+  exportModel(l, extras).forEach(b => {
+    if (b.k === "title") { const ls = wrap([{ s: b.t, f: "B", color: INK }], PW - 2 * M, 20); drawLines(ls, M, 20, 24); y -= 4; }
+    else if (b.k === "meta") { drawLines(wrap([{ s: b.t, f: "R", color: MUTE }], PW - 2 * M, 10), M, 10, 14); y -= 8; line(M, y, PW - M, y, RULE, 1); y -= 6; }
+    else if (b.k === "h1" || b.k === "h2") {
+      const size = b.k === "h1" ? 14 : 12.5, ls = wrap([{ s: b.t, f: "B", color: INK }], PW - 2 * M - (b.ts ? TSW : 0), size);
+      need(size * 1.3 * ls.length + 60); y -= b.k === "h1" ? 16 : 12;
+      const top = y;
+      drawLines(ls, M + (b.ts ? TSW : 0), size, size * 1.3);
+      if (b.ts) txt(M, top - size * 1.3, b.ts, "M", 8, MUTE);
+      y -= 5; line(M, y, PW - M, y, b.k === "h1" ? RULE : INK, b.k === "h1" ? 0.8 : 1.1); y -= 3;
+    }
+    else if (b.k === "note") {
+      const x = M + TSW + b.level * 16, size = 10.5, lead = 14.5;
+      const runs = [];
+      if (b.tag === "test") runs.push({ s: "On the test: ", f: "B", color: TAGC.test });
+      else if (b.label) runs.push({ s: b.label + ": ", f: "B", color: TAGC[b.tag] || INK });
+      runs.push({ s: b.text, f: b.tag === "test" ? "B" : "R", color: INK });
+      const ls = wrap(runs, PW - M - x, size);
+      need(lead + 4); y -= 4;
+      txt(M, y - lead, b.ts, "M", 8, MUTE);
+      if (b.level > 0) txt(x - 9, y - lead, "\x95", "R", size, MUTE);
+      drawLines(ls, x, size, lead, b.tag === "test");
+    }
+    else if (b.k === "para") { y -= 4; drawLines(wrap([{ s: b.t, f: "R", color: INK }], PW - 2 * M, 10.5), M, 10.5, 14.5); }
+    else if (b.k === "bullets") { b.items.forEach(it => { const ls = wrap([{ s: it, f: "R", color: INK }], PW - 2 * M - 14, 10.5); need(14.5); y -= 3; const t0 = y; drawLines(ls, M + 14, 10.5, 14.5); txt(M + 3, t0 - 14.5, "\x95", "R", 10.5, MUTE); }); }
+    else if (b.k === "qa") { b.items.forEach((it, i) => { need(30); y -= 6; drawLines(wrap([{ s: (i + 1) + ". " + it.q, f: "B", color: INK }], PW - 2 * M, 10.5), M, 10.5, 14.5); drawLines(wrap([{ s: "Answer: ", f: "B", color: MUTE }, { s: it.a, f: "R", color: INK }], PW - 2 * M - 14, 10.5), M + 14, 10.5, 14.5); }); }
+    else if (b.k === "table") {
+      const c1 = 150, size = 10, lead = 13.5, pad = 5, W1 = c1 - 2 * pad, W2 = PW - 2 * M - c1 - 2 * pad;
+      const row = (cells, head) => {
+        const a = wrap([{ s: cells[0], f: "B", color: INK }], W1, size), bb = wrap([{ s: cells[1], f: head ? "B" : "R", color: INK }], W2, size);
+        const h = Math.max(a.length, bb.length) * lead + 2 * pad;
+        if (need(h)) { if (!head) row(b.head, true); }
+        const top = y;
+        if (head) rect(M, top - h, PW - 2 * M, h, "0.89 0.91 0.98");
+        let yy = top - pad; a.forEach(L => { yy -= lead; let cx = M + pad; L.forEach(r => { txt(cx, yy + 3, r.s, r.f, size, r.color); cx += pdfWidth(r.s, r.f, size); }); });
+        yy = top - pad; bb.forEach(L => { yy -= lead; let cx = M + c1 + pad; L.forEach(r => { txt(cx, yy + 3, r.s, r.f, size, r.color); cx += pdfWidth(r.s, r.f, size); }); });
+        line(M, top, PW - M, top, RULE); line(M, top - h, PW - M, top - h, RULE); line(M, top, M, top - h, RULE); line(M + c1, top, M + c1, top - h, RULE); line(PW - M, top, PW - M, top - h, RULE);
+        y = top - h;
+      };
+      y -= 6; need(lead * 3); row(b.head, true); b.rows.forEach(r => row(r, false)); y -= 4;
+    }
+  });
+  return pdfAssemble(pages, l.title, PW, PH, M);
+}
+function pdfAssemble(pages, title, PW, PH, M) {
+  const MUTE = "0.37 0.42 0.52", foot = toWin("Scribble  ·  " + title).slice(0, 90);
+  const pesc = s => s.replace(/\\/g, "\\\\").replace(/\(/g, "\\(").replace(/\)/g, "\\)");
+  const objs = [];
+  const fonts = ["Helvetica", "Helvetica-Bold", "Helvetica-Oblique", "Courier"];
+  const pageIds = pages.map((_, i) => 7 + i * 2);
+  objs[1] = "<< /Type /Catalog /Pages 2 0 R >>";
+  objs[2] = `<< /Type /Pages /Kids [${pageIds.map(i => i + " 0 R").join(" ")}] /Count ${pages.length} >>`;
+  fonts.forEach((f, i) => objs[3 + i] = `<< /Type /Font /Subtype /Type1 /BaseFont /${f} /Encoding /WinAnsiEncoding >>`);
+  pages.forEach((ops, i) => {
+    const n = `Page ${i + 1} of ${pages.length}`;
+    const footer = `BT /F1 8 Tf ${MUTE} rg ${M} 36 Td (${pesc(foot)}) Tj ET BT /F1 8 Tf ${MUTE} rg ${(PW - M - pdfWidth(n, "R", 8)).toFixed(2)} 36 Td (${n}) Tj ET`;
+    const content = ops.filter(Boolean).join("\n") + "\n" + footer;
+    objs[pageIds[i]] = `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${PW} ${PH}] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R /F4 6 0 R >> >> /Contents ${pageIds[i] + 1} 0 R >>`;
+    objs[pageIds[i] + 1] = `<< /Length ${content.length} >>\nstream\n${content}\nendstream`;
+  });
+  const d = new Date(), z = n => String(n).padStart(2, "0");
+  const info = 7 + pages.length * 2;
+  const u16 = s => "<FEFF" + [...String(s)].map(ch => { const c = ch.codePointAt(0); if (c < 0x10000) return c.toString(16).padStart(4, "0"); const v = c - 0x10000; return ((v >> 10) + 0xD800).toString(16) + ((v & 0x3FF) + 0xDC00).toString(16); }).join("").toUpperCase() + ">";
+  objs[info] = `<< /Title ${u16(title)} /Producer (Scribble) /Creator (Scribble) /CreationDate (D:${d.getFullYear()}${z(d.getMonth() + 1)}${z(d.getDate())}${z(d.getHours())}${z(d.getMinutes())}${z(d.getSeconds())}) >>`;
+  let out = "%PDF-1.4\n%\xE2\xE3\xCF\xD3\n"; const offs = [];
+  for (let i = 1; i < objs.length; i++) { offs[i] = out.length; out += `${i} 0 obj\n${objs[i]}\nendobj\n`; }
+  const xref = out.length;
+  out += `xref\n0 ${objs.length}\n0000000000 65535 f \n` + offs.slice(1).map(o => String(o).padStart(10, "0") + " 00000 n \n").join("");
+  out += `trailer\n<< /Size ${objs.length} /Root 1 0 R /Info ${info} 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
+  const bytes = new Uint8Array(out.length); for (let i = 0; i < out.length; i++) bytes[i] = out.charCodeAt(i) & 255;
+  return bytes;
+}
+
+/* --- Word (.docx) --- WordprocessingML parts in a plain (stored) zip. */
+function makeDOCX(l, extras = true) {
+  const x = s => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, "");
+  const TAGC = { key: "2747C7", def: "12805A", ex: "7446BE", q: "B65310", test: "7A5E00", rewatch: "B32340" };
+  const run = (t, o = {}) => {
+    const pr = [o.font ? `<w:rFonts w:ascii="${o.font}" w:hAnsi="${o.font}" w:cs="${o.font}"/>` : "", o.b ? "<w:b/>" : "", o.i ? "<w:i/>" : "", o.color ? `<w:color w:val="${o.color}"/>` : "", o.size ? `<w:sz w:val="${o.size}"/><w:szCs w:val="${o.size}"/>` : "", o.hl ? `<w:highlight w:val="yellow"/>` : ""].join("");
+    return String(t).split("\n").map((part, i) => (i ? "<w:r><w:br/></w:r>" : "") + `<w:r>${pr ? `<w:rPr>${pr}</w:rPr>` : ""}<w:t xml:space="preserve">${x(part)}</w:t></w:r>`).join("");
+  };
+  const para = (runs, o = {}) => `<w:p><w:pPr>${o.style ? `<w:pStyle w:val="${o.style}"/>` : ""}${o.keep ? "<w:keepNext/>" : ""}${o.ind != null ? `<w:ind w:left="${o.ind}" w:hanging="${o.hang || 0}"/>` : ""}${o.after != null ? `<w:spacing w:after="${o.after}"/>` : ""}</w:pPr>${runs}</w:p>`;
+  const body = [];
+  exportModel(l, extras).forEach(b => {
+    if (b.k === "title") body.push(para(run(b.t), { style: "Title" }));
+    else if (b.k === "meta") body.push(para(run(b.t, { color: "56637F" }), { style: "Subtitle" }));
+    else if (b.k === "h1") body.push(para(run(b.t), { style: "Heading1" }));
+    else if (b.k === "h2") body.push(para(run(b.ts + "  ", { font: "Consolas", color: "56637F", size: 18 }) + run(b.t), { style: "Heading2" }));
+    else if (b.k === "note") {
+      const lab = b.tag === "test" ? run("On the test: ", { b: true, color: TAGC.test, hl: true }) : b.label ? run(b.label + ": ", { b: true, color: TAGC[b.tag] }) : "";
+      body.push(para(run(b.ts + "   ", { font: "Consolas", color: "56637F", size: 17 }) + lab + run(b.text, { b: b.tag === "test", hl: b.tag === "test" }), { ind: 900 + b.level * 360, hang: 900, after: 80 }));
+    }
+    else if (b.k === "para") body.push(para(run(b.t)));
+    else if (b.k === "bullets") b.items.forEach(it => body.push(para(run("•\t") + run(it), { ind: 360, hang: 360, after: 60 })));
+    else if (b.k === "qa") b.items.forEach((it, i) => { body.push(para(run((i + 1) + ". " + it.q, { b: true }), { keep: true, after: 40 })); body.push(para(run("Answer: ", { b: true, color: "56637F" }) + run(it.a), { ind: 360, after: 160 })); });
+    else if (b.k === "table") {
+      const bd = ["top", "left", "bottom", "right", "insideH", "insideV"].map(s => `<w:${s} w:val="single" w:sz="4" w:space="0" w:color="C9D2E3"/>`).join("");
+      const cell = (t, w, head) => `<w:tc><w:tcPr><w:tcW w:w="${w}" w:type="dxa"/>${head ? `<w:shd w:val="clear" w:color="auto" w:fill="E3E8FA"/>` : ""}</w:tcPr>${para(run(t, { b: head || w === 2800 }), { after: 0 })}</w:tc>`;
+      const tr = (r, head) => `<w:tr>${head ? "<w:trPr><w:tblHeader/></w:trPr>" : ""}${cell(r[0], 2800, head)}${cell(r[1], 7280, head)}</w:tr>`;
+      body.push(`<w:tbl><w:tblPr><w:tblW w:w="10080" w:type="dxa"/><w:tblBorders>${bd}</w:tblBorders><w:tblCellMar><w:top w:w="80" w:type="dxa"/><w:left w:w="100" w:type="dxa"/><w:bottom w:w="80" w:type="dxa"/><w:right w:w="100" w:type="dxa"/></w:tblCellMar><w:tblLook w:val="04A0" w:firstRow="1" w:lastRow="0" w:firstColumn="1" w:lastColumn="0" w:noHBand="0" w:noVBand="1"/></w:tblPr><w:tblGrid><w:gridCol w:w="2800"/><w:gridCol w:w="7280"/></w:tblGrid>${tr(b.head, true)}${b.rows.map(r => tr(r, false)).join("")}</w:tbl>`, para("", { after: 0 }));
+    }
+  });
+  const W = 'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"';
+  const doc = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<w:document ${W}><w:body>${body.join("")}<w:sectPr><w:pgSz w:w="12240" w:h="15840"/><w:pgMar w:top="1080" w:right="1080" w:bottom="1080" w:left="1080" w:header="720" w:footer="720" w:gutter="0"/></w:sectPr></w:body></w:document>`;
+  const sty = (id, name, ppr, rpr, extra = "") => `<w:style w:type="paragraph" w:styleId="${id}"><w:name w:val="${name}"/><w:basedOn w:val="Normal"/><w:next w:val="Normal"/>${extra}<w:qFormat/><w:pPr>${ppr}</w:pPr><w:rPr>${rpr}</w:rPr></w:style>`;
+  const styles = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<w:styles ${W}><w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="Calibri" w:hAnsi="Calibri" w:eastAsia="Calibri" w:cs="Calibri"/><w:color w:val="13203B"/><w:sz w:val="22"/><w:szCs w:val="22"/><w:lang w:val="en-US"/></w:rPr></w:rPrDefault><w:pPrDefault><w:pPr><w:spacing w:after="120" w:line="276" w:lineRule="auto"/></w:pPr></w:pPrDefault></w:docDefaults>`
+    + `<w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/><w:qFormat/></w:style>`
+    + sty("Title", "Title", `<w:spacing w:after="60"/>`, `<w:b/><w:sz w:val="44"/><w:szCs w:val="44"/>`)
+    + sty("Subtitle", "Subtitle", `<w:spacing w:after="240"/><w:pBdr><w:bottom w:val="single" w:sz="6" w:space="6" w:color="D6DEEB"/></w:pBdr>`, `<w:sz w:val="20"/>`)
+    + sty("Heading1", "heading 1", `<w:keepNext/><w:spacing w:before="320" w:after="120"/><w:outlineLvl w:val="0"/>`, `<w:b/><w:color w:val="2747C7"/><w:sz w:val="30"/><w:szCs w:val="30"/>`)
+    + sty("Heading2", "heading 2", `<w:keepNext/><w:spacing w:before="280" w:after="100"/><w:pBdr><w:bottom w:val="single" w:sz="8" w:space="2" w:color="13203B"/></w:pBdr><w:outlineLvl w:val="1"/>`, `<w:b/><w:sz w:val="26"/><w:szCs w:val="26"/>`)
+    + `</w:styles>`;
+  const now = new Date().toISOString().replace(/\.\d+Z$/, "Z");
+  const files = [
+    ["[Content_Types].xml", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/><Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/><Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/><Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/></Types>`],
+    ["_rels/.rels", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/><Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties" Target="docProps/app.xml"/></Relationships>`],
+    ["word/_rels/document.xml.rels", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`],
+    ["word/document.xml", doc],
+    ["word/styles.xml", styles],
+    ["docProps/core.xml", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><dc:title>${x(l.title)}</dc:title><dc:subject>${x(l.course)}</dc:subject><dc:creator>Scribble</dc:creator><dcterms:created xsi:type="dcterms:W3CDTF">${now}</dcterms:created><dcterms:modified xsi:type="dcterms:W3CDTF">${now}</dcterms:modified></cp:coreProperties>`],
+    ["docProps/app.xml", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties"><Application>Scribble</Application></Properties>`]
+  ];
+  return zipStore(files);
+}
+const CRC_T = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+function crc32(b) { let c = 0xFFFFFFFF; for (let i = 0; i < b.length; i++) c = CRC_T[(c ^ b[i]) & 255] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; }
+function zipStore(files) {
+  const enc = new TextEncoder(), parts = [], central = []; let off = 0;
+  const d = new Date(), dtime = (d.getHours() << 11) | (d.getMinutes() << 5) | (d.getSeconds() >> 1), ddate = ((d.getFullYear() - 1980) << 9) | ((d.getMonth() + 1) << 5) | d.getDate();
+  files.forEach(([name, text]) => {
+    const nb = enc.encode(name), data = enc.encode(text), crc = crc32(data);
+    const h = new DataView(new ArrayBuffer(30));
+    [[0, 0x04034b50, 4], [4, 20, 2], [6, 0x0800, 2], [8, 0, 2], [10, dtime, 2], [12, ddate, 2], [14, crc, 4], [18, data.length, 4], [22, data.length, 4], [26, nb.length, 2], [28, 0, 2]].forEach(([o, v, n]) => n === 4 ? h.setUint32(o, v, true) : h.setUint16(o, v, true));
+    const c = new DataView(new ArrayBuffer(46));
+    [[0, 0x02014b50, 4], [4, 20, 2], [6, 20, 2], [8, 0x0800, 2], [10, 0, 2], [12, dtime, 2], [14, ddate, 2], [16, crc, 4], [20, data.length, 4], [24, data.length, 4], [28, nb.length, 2], [30, 0, 2], [32, 0, 2], [34, 0, 2], [36, 0, 2], [38, 0, 4], [42, off, 4]].forEach(([o, v, n]) => n === 4 ? c.setUint32(o, v, true) : c.setUint16(o, v, true));
+    parts.push(new Uint8Array(h.buffer), nb, data); central.push(new Uint8Array(c.buffer), nb);
+    off += 30 + nb.length + data.length;
+  });
+  const csize = central.reduce((a, b) => a + b.length, 0);
+  const e = new DataView(new ArrayBuffer(22));
+  [[0, 0x06054b50, 4], [4, 0, 2], [6, 0, 2], [8, files.length, 2], [10, files.length, 2], [12, csize, 4], [16, off, 4], [20, 0, 2]].forEach(([o, v, n]) => n === 4 ? e.setUint32(o, v, true) : e.setUint16(o, v, true));
+  const all = [...parts, ...central, new Uint8Array(e.buffer)], out = new Uint8Array(all.reduce((a, b) => a + b.length, 0));
+  let p = 0; all.forEach(b => { out.set(b, p); p += b.length; });
+  return out;
+}
+
+/* Saving: the claude.ai version asks the viewer through the downloads capability; the GitHub Pages site downloads directly. */
+function inFrame() { try { return window.self !== window.top; } catch { return true; } }
+async function saveBlob(name, blob) {
+  if (S.downloads) {
+    try { const r = await S.downloads.save({ filename: name, data: blob }); if (r?.status === "saved") toast("Saved " + name); else if (r?.status === "delivered") toast("Sent " + name); return true; }
+    catch (err) {
+      const c = err?.code;
+      if (c === "declined") return false;
+      if (c === "rate_limited") { toast("A save is already waiting for you. Finish that one first."); return false; }
+      if (c === "rejected_extension" || c === "extension_not_enabled") { toast("This file type can't be saved here. Try another format, or Copy text."); return false; }
+      if (c === "bad_request" || c === "transform_error" || c === "too_large") { toast("Couldn't make that file. Try again, or use Copy text."); return false; }
+      S.downloads = null;
+    }
+  }
+  if (inFrame()) { toast("Saving files isn't available here. Use Copy text instead."); return false; }
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name; a.rel = "noopener";
+  document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 4000);
+  toast("Downloaded " + name); return true;
+}
+
+/* ---------- export: text ---------- */
 function toMarkdown(l) {
   const out = [`# ${l.title}`, `${l.course ? l.course + " · " : ""}${new Date(l.createdAt).toLocaleDateString()}`, ""];
   l.notes.forEach(n => {
@@ -898,12 +1181,22 @@ function toMarkdown(l) {
 }
 function openExport() {
   const l = cur(); if (!l) return;
-  const md = toMarkdown(l);
-  $("#layer").innerHTML = `<div class="overlay" data-act="closeLayer"><div class="card" role="dialog" aria-label="Copy or save notes">
-    <h3 class="h">Your notes as text</h3>
-    <textarea class="field" id="exportText" readonly>${esc(md)}</textarea>
-    <div class="row-wrap"><button class="btn primary" data-act="copy">Copy</button>${S.downloads ? `<button class="btn" data-act="saveFile">Save as .md file</button>` : ""}<div style="flex:1"></div><button class="btn ghost" data-act="closeLayer">Close</button></div>
+  const canSave = !!S.downloads || !inFrame();
+  const extras = l.mySummary.trim() || l.dump.trim() || l.ai || l.notes.some(n => n.tag === "rewatch");
+  $("#layer").innerHTML = `<div class="overlay" data-act="closeLayer"><div class="card export" role="dialog" aria-modal="true" aria-labelledby="exportTitle" id="exportPanel">
+    <div class="dump-head"><h3 class="h" id="exportTitle">Export notes</h3><button class="btn small ghost" data-act="closeLayer">Close</button></div>
+    ${canSave ? `<div class="fmt-grid">
+      <button class="fmt" data-act="saveFmt" data-fmt="pdf"><span class="fmt-badge pdf">PDF</span><span><b>PDF</b><small>To read, print or send</small></span></button>
+      <button class="fmt" data-act="saveFmt" data-fmt="docx"><span class="fmt-badge doc">W</span><span><b>Word (.docx)</b><small>To edit in Word or Google Docs</small></span></button>
+    </div>` : `<p class="muted" style="margin:0">Saving files isn't available here. Copy the text below instead.</p>`}
+    ${extras ? `<label class="check"><input type="checkbox" id="exportExtras" checked> Include my summary, brain dump, Claude's summary, practice questions and rewatch list</label>` : ""}
+    <p class="muted" style="margin:0;font-size:.84rem">Each note keeps its video time, sections become headings, ★ test notes are highlighted, and definitions written as “term: meaning” become a Key terms table.</p>
+    <details class="more"><summary>Plain text</summary>
+      <textarea class="field" id="exportText" readonly aria-label="Notes as text">${esc(toMarkdown(l))}</textarea>
+      <div class="row-wrap"><button class="btn small" data-act="copy">Copy text</button>${canSave ? `<button class="btn small" data-act="saveFmt" data-fmt="md">Save as .md</button>` : ""}</div>
+    </details>
   </div></div>`;
+  $("#layer .fmt, #layer .btn")?.focus();
 }
 
 /* ---------- events ---------- */
@@ -962,9 +1255,18 @@ document.addEventListener("click", async e => {
       catch { txt.focus(); txt.select(); toast("Selected — copy it from your keyboard menu"); }
       break;
     }
-    case "saveFile": {
-      try { const r = await S.downloads.save({ filename: (l.title.replace(/[^\w\- ]+/g, "").trim() || "notes") + ".md", data: $("#exportText").value }); if (r?.status === "saved") toast("Saved"); }
-      catch (err) { if (err?.code === "unavailable") { S.downloads = null; toast("Saving files isn't available here. Use Copy instead."); } }
+    case "saveFmt": {
+      if (!l || el.disabled) break;
+      const fmtx = el.dataset.fmt, extras = $("#exportExtras") ? $("#exportExtras").checked : true;
+      el.disabled = true;
+      try {
+        let blob;
+        if (fmtx === "pdf") blob = new Blob([makePDF(l, extras)], { type: "application/pdf" });
+        else if (fmtx === "docx") blob = new Blob([makeDOCX(l, extras)], { type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" });
+        else blob = new Blob([toMarkdown(l)], { type: "text/markdown" });
+        await saveBlob(exportName(l, fmtx), blob);
+      } catch (err) { console.warn(err); toast("Couldn't make that file. Try again, or use Copy text."); }
+      el.disabled = false;
       break;
     }
     case "flip": if (!S.quiz.flipped) { S.quiz.flipped = true; render(); } break;
@@ -1053,7 +1355,7 @@ document.addEventListener("focusout", e => {
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && S.clock.running) { try { navigator.wakeLock?.request("screen").then(w => S.wake = w).catch(() => {}); } catch {} } });
 
 /* Read-only hook for the automated checks in tests/. */
-window.SCRIBBLE = Object.freeze({ CHANGES, sectionGroups, buildDeck, normalize, toMarkdown });
+window.SCRIBBLE = Object.freeze({ CHANGES, sectionGroups, buildDeck, normalize, toMarkdown, glossary, exportModel, makePDF, makeDOCX, toWin, crc32 });
 
 /* ---------- boot ---------- */
 loadLocal();

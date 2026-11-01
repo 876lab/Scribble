@@ -151,8 +151,49 @@ const URL_ = process.env.SITE || 'file://' + path.resolve(__dirname, '..', 'inde
   ok((await page.inputValue('#dumpText')) === 'Draft that should survive', 'next brain dump starts from the saved text');
   await page.click('text=Cancel');
 
+  // ---- Export: PDF and Word ----
+  await page.click('[data-tab=summary]');
+  ok(await page.isVisible('.gloss >> text=Cellular respiration'), 'Summary shows a Key terms table built from definitions');
+  await page.click('[data-act=export]');
+  ok(await page.isVisible('#exportPanel'), 'export panel opens');
+  ok(await page.isVisible('[data-fmt=pdf]') && await page.isVisible('[data-fmt=docx]'), 'PDF and Word buttons shown');
+  ok(!(await overflow()), 'export panel: no sideways scrolling');
+  await page.screenshot({ path: OUT + '/export.png' });
+  const grab = async fmtx => { const [dl] = await Promise.all([page.waitForEvent('download'), page.click(`[data-fmt=${fmtx}]`)]); const f = path.join(OUT, 'export-' + fmtx + path.extname(dl.suggestedFilename())); await dl.saveAs(f); return { name: dl.suggestedFilename(), buf: fs.readFileSync(f) }; };
+  const pdf = await grab('pdf');
+  ok(pdf.name === 'Cellular respiration.pdf', 'PDF file name from the lesson title: ' + pdf.name);
+  { const s = pdf.buf.toString('latin1');
+    ok(s.startsWith('%PDF-1.4') && s.trimEnd().endsWith('%%EOF'), 'PDF has a header and end marker');
+    const xref = +s.match(/startxref\n(\d+)/)[1], rows = s.slice(xref).split('\n').slice(3).filter(r => / 00000 n $/.test(r)).map(r => +r.slice(0, 10));
+    ok(rows.length > 6 && rows.every((o, i) => s.startsWith(`${i + 1} 0 obj`, o)), 'every PDF object is where the index says');
+    const lens = [...s.matchAll(/<< \/Length (\d+) >>\nstream\n/g)];
+    ok(lens.length >= 1 && lens.every(m => s.substr(m.index + m[0].length + +m[1], 10) === '\nendstream'), 'PDF page streams have the right lengths');
+    ok(/\(Cellular respiration\)/.test(s) && /Most of it happens in the mitochondria/.test(s), 'PDF contains the notes');
+    ok(/Key terms/.test(s) && /Rewatch before the test/.test(s), 'PDF has the Key terms table and rewatch list'); }
+  const doc = await grab('docx');
+  ok(doc.name === 'Cellular respiration.docx', 'Word file name: ' + doc.name);
+  { const b = doc.buf, zlib = require('zlib'), files = {};
+    const eocd = b.lastIndexOf(Buffer.from([0x50, 0x4b, 0x05, 0x06])); let p = b.readUInt32LE(eocd + 16);
+    for (let i = 0; i < b.readUInt16LE(eocd + 10); i++) { const crc = b.readUInt32LE(p + 16), size = b.readUInt32LE(p + 20), nl = b.readUInt16LE(p + 28), off = b.readUInt32LE(p + 42), name = b.toString('utf8', p + 46, p + 46 + nl); const ln = b.readUInt16LE(off + 26), data = b.subarray(off + 30 + ln, off + 30 + ln + size); files[name] = { ok: !zlib.crc32 || zlib.crc32(data) === crc, text: data.toString('utf8') }; p += 46 + nl; }
+    ok(['[Content_Types].xml', '_rels/.rels', 'word/document.xml', 'word/styles.xml', 'docProps/core.xml'].every(n => files[n]), 'Word file has its parts: ' + Object.keys(files).join(','));
+    ok(Object.values(files).every(f => f.ok), 'Word file checksums match');
+    const bad = await page.evaluate(parts => parts.filter(x => new DOMParser().parseFromString(x, 'application/xml').getElementsByTagName('parsererror').length).length, Object.values(files).map(f => f.text));
+    ok(bad === 0, 'every Word part is well-formed XML');
+    const d = files['word/document.xml'].text;
+    ok(/<w:pStyle w:val="Title"\/>/.test(d) && /Heading2/.test(d) && /<w:tbl>/.test(d) && /w:highlight w:val="yellow"/.test(d), 'Word file has title, section headings, Key terms table and highlighted test notes'); }
+  await page.uncheck('#exportExtras');
+  const pdf2 = await grab('pdf');
+  ok(!/My summary|Rewatch before the test/.test(pdf2.buf.toString('latin1')) && /Key terms/.test(pdf2.buf.toString('latin1')), 'unticking extras leaves out summaries but keeps notes and key terms');
+  await page.click('#exportPanel summary');
+  ok((await page.inputValue('#exportText')).startsWith('# Cellular respiration'), 'plain text still available');
+  await page.keyboard.press('Escape');
+  ok(await page.isHidden('#exportPanel'), 'Escape closes the export panel');
+  const enc = await page.evaluate(() => [window.SCRIBBLE.toWin('“Café” — ★ → μ 🧠'), window.SCRIBBLE.crc32(new TextEncoder().encode('123456789'))]);
+  ok(enc[0] === '\x93Café\x94 \x97 * -> \xB5 ?' && enc[1] === 0xCBF43926, 'PDF text encoding and zip checksum are correct: ' + JSON.stringify(enc[0]));
+
   // ---- Dark theme and reload ----
   await page.emulateMedia({ colorScheme: 'dark' });
+  await page.click('[data-tab=quiz]');
   await page.click('text=Start 2-minute brain dump'); await page.click('text=Check against my notes');
   const bg = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
   ok(bg !== 'rgb(237, 241, 247)' && bg !== 'rgba(0, 0, 0, 0)', 'dark theme repaints the page: ' + bg);

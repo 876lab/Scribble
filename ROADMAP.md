@@ -31,6 +31,13 @@ The working plan for the weekly update runs (Fridays, 3:20am Jamaica time, after
 ## Backlog (top = next)
 - [x] (2026-10-30) Weekly update setup: build script, tests, GitHub checks, this roadmap, changelog, and a What's new button with a dot for unseen updates.
 - [x] (2026-10-30) Recall check before the test: 2-minute brain dump on Quiz me, compared section by section ("I had this" / "Missed"), a quiz on just the missed sections, and a recall card for every section.
+- [x] (2026-10-31, built in the daytime session) **Owner request: export notes as PDF or Word.** Export panel with PDF and Word (.docx) built in the app (no libraries), a Key terms table, and the plain text kept.
+- [ ] **Owner asked (2026-10-31): charts and tables from notes, and other useful tools.** Options offered to the owner; build the ones he picks, in this order unless he says otherwise:
+  - Tables typed straight into notes: lines like `Stage | Where | ATP` become a table on screen and in PDF/Word exports.
+  - Lesson map: a timeline chart of the video showing where each note, ★ test note and rewatch marker falls, with "quiet stretches" (no notes for 3+ minutes) flagged as places he may have drifted off.
+  - In the claude.ai version: "Make a table" (Claude turns the notes into a comparison table) and "Make a chart" (only when the notes contain numbers), both from the notes only, with the viewer's consent.
+  - Course export: all lessons of a course in one PDF or Word file (for exam revision).
+  - Flashcards as a CSV file for Anki or Quizlet.
 - [ ] **Add to Home Screen and offline use.** A web app manifest, icons (our own drawing of the Scribble pencil mark) and a small service worker so the GitHub Pages version installs on a phone like an app and opens without a connection. Follow OMGym's setup (`manifest.webmanifest`, `icons/`, `sw.js`). Test: manifest valid, icons reachable on the live site, page still loads offline after one visit.
 - [ ] **Spaced review across days.** Cards remember when they were last right or wrong (Leitner boxes: again today, 1 day, 3 days, 7 days) and the library shows "N cards due" across lessons. Distributed practice is one of the two "high utility" techniques in Dunlosky et al. 2013. Keep it optional and quiet: no streaks or guilt.
 - [ ] **Brain dump, next step:** in the claude.ai version, an optional "Check it for me" button that asks Claude (sample capability, viewer consent) which sections the brain dump covered and pre-marks them; the owner can change any mark. Hidden where Claude isn't available.
@@ -43,4 +50,5 @@ The working plan for the weekly update runs (Fridays, 3:20am Jamaica time, after
 - [ ] Re-record the walkthrough video when the home screen or Quiz me changes enough that it looks out of date (fonts couldn't load in the recording environment on 26 Oct; use them if they can).
 
 ## Notes from runs
+- 2026-10-31 (daytime, owner request): PDF and Word export built and tested. The PDF uses standard fonts (no embedding), so non-Latin scripts and emoji print as "?"; the Word file keeps everything. If the owner ever writes notes in another script, embed a font or point him to Word export.
 - 2026-10-30 (setup run, with the owner): The scheduled runs can't see the owner's weekly usage meter (no tool or token exposes it), so the 75% pause is done by pausing the scheduled tasks. GitHub repository settings, Pages settings and topics can't be changed from a Claude session (proxy refuses); the owner did those by hand. The live site (github.io) and the npm registry aren't reachable from the session, so local tests use the global Playwright and the live site is checked by the GitHub health workflow instead.

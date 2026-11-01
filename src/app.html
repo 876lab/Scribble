@@ -242,6 +242,29 @@ textarea.field{resize:vertical;line-height:1.5}
 .seg{display:flex;gap:6px;flex-wrap:wrap}
 .seg .btn[aria-pressed="true"].ok{background:var(--ok);border-color:var(--ok);color:var(--sheet)}
 .seg .btn[aria-pressed="true"].no{background:var(--danger);border-color:var(--danger);color:var(--sheet)}
+/* Search */
+.searchbox{position:relative;display:flex;align-items:center}
+.searchbox svg{position:absolute;left:12px;width:18px;height:18px;fill:none;stroke:var(--muted);stroke-width:2;stroke-linecap:round;pointer-events:none}
+.searchbox input{width:100%;border:1.5px solid var(--rule);background:var(--sheet);border-radius:12px;padding:11px 40px 11px 38px;font-size:1rem;-webkit-appearance:none;appearance:none}
+.searchbox input:focus{border-color:var(--accent);outline:none}
+.searchbox input::-webkit-search-cancel-button{display:none}
+.searchbox .clear{position:absolute;right:6px;border:0;background:none;width:32px;height:32px;border-radius:8px;color:var(--muted);font-size:1.1rem;line-height:1}
+mark.hl{background:var(--hi);color:var(--hi-ink);border-radius:3px;padding:0 1px}
+.results{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:var(--s3)}
+.res{padding:0;overflow:hidden}
+.res-head{display:block;width:100%;text-align:left;border:0;background:none;padding:var(--s3) var(--s4) var(--s2)}
+.res-head .eyebrow{font-size:.72rem;text-transform:uppercase;letter-spacing:.08em;color:var(--accent);font-weight:700}
+.res-head .title{font-family:var(--f-display);font-variation-settings:"CASL" .5;font-weight:750;font-size:1.05rem;line-height:1.3}
+.res-head .count{font-size:.8rem;color:var(--muted)}
+.hits{list-style:none;margin:0;padding:0 0 var(--s2)}
+.hit{display:grid;grid-template-columns:48px 1fr;gap:var(--s2);width:100%;text-align:left;border:0;border-top:1px solid var(--rule);background:none;padding:9px var(--s4);font-size:.93rem;line-height:1.4}
+.hit:active{background:var(--accent-soft)}
+.hit .ts{font-family:var(--f-mono);font-variation-settings:"MONO" 1;font-size:.74rem;color:var(--muted);padding-top:2px;font-variant-numeric:tabular-nums}
+.hit .where{display:block;font-size:.72rem;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.06em}
+.hit .txt{min-width:0;overflow-wrap:anywhere}
+.res-more{display:block;width:100%;border:0;border-top:1px solid var(--rule);background:none;padding:9px;color:var(--accent);font-weight:700;font-size:.88rem}
+.note.jump{animation:jump 2.2s ease-out}
+@keyframes jump{0%,40%{background:color-mix(in srgb,var(--hi) 55%,var(--sheet))}100%{background:transparent}}
 .fmt-grid{display:grid;grid-template-columns:1fr 1fr;gap:var(--s2)}
 @media (max-width:420px){.fmt-grid{grid-template-columns:1fr}}
 .fmt{display:flex;align-items:center;gap:var(--s3);text-align:left;border:1px solid var(--rule);background:var(--sheet);border-radius:14px;padding:var(--s3);min-height:64px;transition:transform .08s}
@@ -301,6 +324,11 @@ const CHIP_ORDER = ["key", "def", "ex", "q", "test", "section"];
 
 /* What's new: newest first. Each run adds one entry at the top (id = date + short slug). */
 const CHANGES = [
+  { id: "2026-10-31-search", d: "2026-10-31", t: "Search your notes", b: [
+    "Search all your lessons from the home screen: matches show highlighted, with the video time and section.",
+    "Tap a match to jump straight to that note. Organize also has a search box for the lesson you're in.",
+    "Capitals and accents don't matter, every word you type must appear, and \"quote marks\" keep words together."
+  ] },
   { id: "2026-10-31-export", d: "2026-10-31", t: "Export as PDF or Word", b: [
     "Export notes as a PDF or a Word file (.docx) from Organize or Summary. Plain text is still there too.",
     "Each note keeps its video time, sections become headings, ★ test notes are highlighted.",
@@ -334,6 +362,7 @@ const S = {
   nudgeMin: +(lsGet("scribble.nudge") ?? 5) || 0, lastNudgeAt: -1, nudgeOn: false,
   editingTime: false,
   aiBusy: false, aiErr: "", aiCtl: null,
+  search: "", lessonQuery: "", jumpTo: null,
   quiz: null, dump: null, newsSeen: lsGet(NEWS_KEY) || "",
   mode: "local", syncState: "", db: null, col: null, sample: null, downloads: null
 };
@@ -449,14 +478,20 @@ function exampleLesson() {
   });
   S.lessons.set(l.id, l); persist(l); return l;
 }
-function openLesson(id, tab = "capture") {
+function openLesson(id, tab = "capture", opts = {}) {
   if (S.clock.running && S.clock.lessonId !== id) stopClock();
+  S.lessonQuery = opts.query || ""; S.jumpTo = opts.jump || null;
   S.currentId = id; S.view = "lesson"; S.tab = tab; S.selected = null; S.editingId = null;
   S.filter = "all"; S.showAll = false; S.confirmDelete = false; S.quiz = null; S.dump = null; stopDumpTimer(); S.aiErr = ""; S.nudgeOn = false;
   const l = cur();
   if (S.clock.lessonId !== id) { S.clock = { running: false, base: l ? l.elapsed : 0, startedAt: 0, lessonId: id }; S.lastNudgeAt = -1; }
   S.draft = ""; S.draftTag = ""; S.draftT = null;
   render(); window.scrollTo(0, 0);
+  if (S.jumpTo) {
+    const el = document.querySelector(`.note[data-id="${CSS.escape(S.jumpTo)}"]`);
+    if (el) { el.classList.add("jump"); el.scrollIntoView({ block: "center" }); }
+    S.jumpTo = null;
+  }
 }
 function goLibrary() {
   if (S.clock.running) stopClock();
@@ -565,9 +600,61 @@ function renderTop() {
     <div class="wrap"><div class="tabs" role="tablist">${tabs.map(([k, label, sub]) => `<button class="tab" role="tab" aria-selected="${S.tab === k}" data-act="tab" data-tab="${k}">${label}<small>${esc(sub)}</small></button>`).join("")}</div></div>`;
 }
 
-function libraryHTML() {
-  const ls = [...S.lessons.values()].sort((a, b) => b.updatedAt - a.updatedAt);
-  const list = ls.map(l => {
+/* ---------- search ---------- */
+/* Case- and accent-insensitive. Every word must appear (in any order); "quoted words" must appear together. */
+const fold = s => String(s ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+function searchTerms(q) { const out = []; String(q || "").replace(/"([^"]+)"|(\S+)/g, (_, a, b) => { const t = fold((a || b).trim()); if (t) out.push(t); return ""; }); return out; }
+function matchesAll(text, terms) { if (!terms.length) return false; const f = fold(text); return terms.every(t => f.includes(t)); }
+function hl(text, terms) {
+  text = String(text ?? ""); if (!terms || !terms.length) return esc(text);
+  const chars = [...text], map = []; let folded = "";
+  chars.forEach((ch, i) => { const f = fold(ch); for (let k = 0; k < f.length; k++) map.push(i); folded += f; });
+  const on = new Array(chars.length).fill(false);
+  terms.forEach(t => { let i = folded.indexOf(t); while (t && i >= 0) { for (let k = i; k < i + t.length; k++) on[map[k]] = true; i = folded.indexOf(t, i + t.length); } });
+  let out = "", open = false;
+  chars.forEach((ch, i) => { if (on[i] && !open) { out += '<mark class="hl">'; open = true; } if (!on[i] && open) { out += "</mark>"; open = false; } out += esc(ch); });
+  return out + (open ? "</mark>" : "");
+}
+function snippet(text, terms, len = 140) {
+  const t = String(text).replace(/\s+/g, " ").trim(); if (t.length <= len) return t;
+  const f = fold(t), i = Math.max(0, Math.min(...terms.map(x => { const j = f.indexOf(x); return j < 0 ? Infinity : j; })) - 40);
+  const start = isFinite(i) ? i : 0;
+  return (start > 0 ? "…" : "") + t.slice(start, start + len).trim() + (start + len < t.length ? "…" : "");
+}
+function searchLessons(q) {
+  const terms = searchTerms(q); if (!terms.length) return { terms, results: [] };
+  const results = [];
+  [...S.lessons.values()].forEach(l => {
+    const hits = []; let section = "";
+    l.notes.forEach(n => {
+      if (n.tag === "section") section = n.text;
+      if (matchesAll(n.text, terms)) hits.push({ kind: "note", id: n.id, t: n.t, tag: n.tag, text: n.text, section: n.tag === "section" ? "" : section });
+    });
+    const other = [["summary", "Your summary", l.mySummary], ["dump", "Brain dump", l.dump], ["ai", "Claude's summary", (l.ai?.summary || []).join(" ")], ["ai", "Practice questions", (l.ai?.questions || []).map(x => x.q + " " + x.a).join(" ")], ["ai", "Key terms", (l.ai?.terms || []).map(x => x.term + ": " + x.meaning).join("; ")]];
+    other.forEach(([kind, where, text]) => { if (text && matchesAll(text, terms)) hits.push({ kind, where, text: snippet(text, terms) }); });
+    const head = matchesAll(l.title + " " + l.course, terms);
+    if (hits.length || head) results.push({ l, hits, head });
+  });
+  results.sort((a, b) => b.hits.length - a.hits.length || b.l.updatedAt - a.l.updatedAt);
+  return { terms, results };
+}
+function searchResultsHTML(q) {
+  const { terms, results } = searchLessons(q);
+  if (!results.length) return `<section class="card empty"><h3 class="h">No matches for “${esc(q.trim())}”</h3><p class="muted">Check the spelling, or try fewer words. Search looks in note text, titles, courses, summaries and brain dumps.</p></section>`;
+  const total = results.reduce((a, r) => a + r.hits.length, 0), SHOW = 5;
+  return `<p class="label" id="searchCount">${total} match${total === 1 ? "" : "es"} in ${results.length} lesson${results.length === 1 ? "" : "s"}</p>
+  <ul class="results">${results.map(({ l, hits }) => `<li class="card res">
+    <button class="res-head" data-act="openSearch" data-id="${l.id}"><div class="eyebrow">${hl(l.course || "No course", terms)}</div><div class="title">${hl(l.title, terms)}</div><div class="count">${hits.length ? `${hits.length} match${hits.length === 1 ? "" : "es"}` : "Title or course matches"}</div></button>
+    ${hits.length ? `<ul class="hits">${hits.slice(0, SHOW).map(h => h.kind === "note"
+      ? `<li><button class="hit" data-act="jump" data-id="${l.id}" data-note="${h.id}"><span class="ts">${fmt(h.t)}</span><span class="txt">${h.section ? `<span class="where">${esc(h.section)}</span>` : ""}${h.tag && h.tag !== "section" ? `<span class="tag ${h.tag}">${esc(h.tag === "test" ? "★ Test" : TAGS[h.tag].label)}</span>` : ""}${h.tag === "section" ? "<b>" + hl(h.text, terms) + "</b>" : hl(h.text, terms)}</span></button></li>`
+      : `<li><button class="hit" data-act="jump" data-id="${l.id}" data-tab="${h.kind === "dump" ? "quiz" : "summary"}"><span class="ts">—</span><span class="txt"><span class="where">${esc(h.where)}</span>${hl(h.text, terms)}</span></button></li>`).join("")}</ul>` : ""}
+    ${hits.length > SHOW ? `<button class="res-more" data-act="openSearch" data-id="${l.id}">Show all ${hits.length} in this lesson</button>` : ""}
+  </li>`).join("")}</ul>`;
+}
+const SEARCH_ICON = `<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>`;
+function libListHTML(ls) {
+  if (S.search.trim()) return searchResultsHTML(S.search);
+  return `<section><p class="label">Your lessons</p><ul class="lesson-list">${ls.map(l => {
     const notes = l.notes.filter(n => n.tag !== "section");
     const star = notes.filter(n => n.tag === "test").length, rw = notes.filter(n => n.tag === "rewatch").length;
     return `<li><button class="card lesson" data-act="open" data-id="${l.id}">
@@ -575,7 +662,11 @@ function libraryHTML() {
       <div class="title">${esc(l.title)}</div>
       <div class="stats"><span><b>${notes.length}</b> notes</span><span><b>${star}</b> ★ for the test</span>${rw ? `<span class="tag rewatch" style="vertical-align:0">${rw} to rewatch</span>` : ""}<span>${l.mySummary.trim() ? "Summary written" : "No summary yet"}</span><span>${fmtDate(l.updatedAt)}</span></div>
     </button></li>`;
-  }).join("");
+  }).join("")}</ul></section>`;
+}
+
+function libraryHTML() {
+  const ls = [...S.lessons.values()].sort((a, b) => b.updatedAt - a.updatedAt);
   const form = S.newOpen ? `<form class="card newform" id="newForm">
       <h3 class="h">New lesson</h3>
       <label class="stack" style="gap:4px"><span class="label" style="margin:0">Lesson title</span><input class="field" id="nfTitle" placeholder="e.g. Week 4 — Supply and demand" required></label>
@@ -587,7 +678,8 @@ function libraryHTML() {
     <section class="hero"><h2>Watch first. <mark>Pause</mark>, then write.</h2>
       <p>A notebook built for video lessons: one tap stamps the time, a gentle reminder tells you when to pause, and everything turns into a summary and a quiz before your test.</p></section>
     ${form}
-    ${ls.length ? `<section><p class="label">Your lessons</p><ul class="lesson-list">${list}</ul></section>` :
+    ${ls.length ? `<div class="searchbox" role="search">${SEARCH_ICON}<input type="search" id="libSearch" placeholder="Search all notes" aria-label="Search all notes" value="${esc(S.search)}" autocomplete="off" enterkeyhint="search"><button class="clear" data-act="clearSearch" data-for="libSearch" aria-label="Clear search" ${S.search ? "" : "hidden"}>✕</button></div>
+    <div id="libBody" aria-live="polite">${libListHTML(ls)}</div>` :
       `<section class="card empty"><h3 class="h">No lessons yet</h3><p class="muted">Each video you watch becomes a lesson. Start one when you press play, or open the example to see how a finished set of notes looks.</p></section>`}
     <section class="card demo"><p class="label" style="margin:0">See how it works</p>
       <video id="demoVideo" controls playsinline preload="metadata" poster="media/walkthrough-poster.jpg" aria-label="Walkthrough of Scribble, one lesson from start to quiz"><source src="media/walkthrough.mp4" type="video/mp4"></video>
@@ -610,7 +702,7 @@ function noteRow(n, opts = {}) {
       <div class="row-wrap"><span class="muted" style="font-size:.85rem">Time</span><input class="field mono" id="editTime" value="${fmt(n.t)}" style="width:9ch;padding:6px 8px"><div style="flex:1"></div><button class="btn small ghost" data-act="editCancel">Cancel</button><button class="btn small primary" data-act="editSave">Save</button></div>
     </div></li>`;
   }
-  return `<li class="${cls}" data-level="${n.level}" data-id="${n.id}" ${opts.click ? `data-act="select" tabindex="0"` : ""}><span class="ts">${fmt(n.t)}</span><div class="body">${tag}<span class="txt">${esc(n.text)}</span></div></li>`;
+  return `<li class="${cls}" data-level="${n.level}" data-id="${n.id}" ${opts.click ? `data-act="select" tabindex="0"` : ""}><span class="ts">${fmt(n.t)}</span><div class="body">${tag}<span class="txt">${hl(n.text, opts.terms)}</span></div></li>`;
 }
 
 function lessonHTML() {
@@ -657,19 +749,34 @@ function recentHTML(l) {
 }
 
 const FILTERS = [["all", "All"], ["test", "★ On the test"], ["q", "Questions"], ["def", "Definitions"], ["key", "Key ideas"], ["rewatch", "⟲ Rewatch"]];
+function orgView(l) {
+  const terms = searchTerms(S.lessonQuery), narrowed = S.filter !== "all" || terms.length;
+  const keep = n => (S.filter === "all" || n.tag === S.filter) && (!terms.length || matchesAll(n.text, terms));
+  // Sections stay as context when anything under them matches; a section whose own title matches always shows.
+  const visible = !narrowed ? l.notes : l.notes.filter((n, i, arr) => {
+    if (n.tag !== "section") return keep(n);
+    if (terms.length && matchesAll(n.text, terms) && S.filter === "all") return true;
+    for (let j = i + 1; j < arr.length && arr[j].tag !== "section"; j++) if (keep(arr[j])) return true;
+    return false;
+  });
+  const matchCount = terms.length ? visible.filter(n => matchesAll(n.text, terms)).length : 0;
+  const list = visible.length ? visible.map(n => noteRow(n, { click: true, sel: S.selected === n.id, editing: S.editingId === n.id, terms })).join("") :
+    `<li class="sheet-empty">${!l.notes.length ? "No notes yet. Add them in Take notes, or with the buttons below." : terms.length ? `No notes match “${esc(S.lessonQuery.trim())}”${S.filter !== "all" ? " with this filter" : ""}.` : "No notes of this type yet."}</li>`;
+  const hint = terms.length ? `<b>${matchCount}</b> note${matchCount === 1 ? "" : "s"} match. Clear the search to reorder.` : `Tap a note to move, indent, retype or edit it.${S.filter !== "all" ? " Clear the filter to reorder." : ""}`;
+  return { list, hint };
+}
+function refreshOrg() { const l = cur(); if (!l) return; const v = orgView(l); const a = $("#orgList"), b = $("#orgHint"); if (a) a.innerHTML = v.list; if (b) b.innerHTML = v.hint; }
 function organizeHTML(l) {
-  const filtered = S.filter === "all" ? l.notes : l.notes.filter(n => n.tag === S.filter || n.tag === "section");
-  const visible = S.filter === "all" ? filtered : filtered.filter((n, i, arr) => n.tag !== "section" || (arr[i + 1] && arr[i + 1].tag !== "section"));
-  const list = visible.length ? visible.map(n => noteRow(n, { click: true, sel: S.selected === n.id, editing: S.editingId === n.id })).join("") :
-    `<li class="sheet-empty">${l.notes.length ? "No notes of this type yet." : "No notes yet. Add them in Take notes, or with the buttons below."}</li>`;
+  const { list, hint } = orgView(l);
   return `<div class="stack org">
     <section class="card stack" style="gap:var(--s3)">
       <label class="stack" style="gap:4px"><span class="label" style="margin:0">Lesson title</span><input class="field" id="metaTitle" value="${esc(l.title)}"></label>
       <label class="stack" style="gap:4px"><span class="label" style="margin:0">Course</span><input class="field" id="metaCourse" value="${esc(l.course)}"></label>
     </section>
+    <div class="searchbox" role="search">${SEARCH_ICON}<input type="search" id="noteSearch" placeholder="Search this lesson" aria-label="Search this lesson" value="${esc(S.lessonQuery)}" autocomplete="off" enterkeyhint="search"><button class="clear" data-act="clearSearch" data-for="noteSearch" aria-label="Clear search" ${S.lessonQuery ? "" : "hidden"}>✕</button></div>
     <div class="filters" role="group" aria-label="Show">${FILTERS.map(([k, label]) => `<button class="chip" data-act="filter" data-f="${k}" aria-pressed="${S.filter === k}">${label}</button>`).join("")}</div>
-    <p class="muted" style="margin:0;font-size:.88rem">Tap a note to move, indent, retype or edit it.${S.filter !== "all" ? " Clear the filter to reorder." : ""}</p>
-    <section class="sheet"><ol class="notes">${list}</ol></section>
+    <p class="muted" style="margin:0;font-size:.88rem" id="orgHint">${hint}</p>
+    <section class="sheet"><ol class="notes" id="orgList">${list}</ol></section>
     <div class="row-wrap"><button class="btn small" data-act="insert" data-kind="section">+ Section</button><button class="btn small" data-act="insert" data-kind="note">+ Note</button><button class="btn small" data-act="export">Export (PDF, Word)</button></div>
     <section class="confirm">${S.confirmDelete ? `<span>Delete “${esc(l.title)}” and all its notes?</span><button class="btn small danger" data-act="deleteLesson">Delete</button><button class="btn small ghost" data-act="cancelDelete">Keep it</button>` : `<button class="btn small ghost warn" data-act="askDelete">Delete lesson</button>`}</section>
     ${S.selected && !S.editingId ? `<div class="pad-bottom"></div>` : ""}
@@ -683,7 +790,7 @@ const ICON = {
 const ico = k => `<svg viewBox="0 0 24 24" aria-hidden="true">${ICON[k]}</svg>`;
 function actionBarHTML(l) {
   const n = l.notes.find(x => x.id === S.selected); if (!n) return "";
-  const i = l.notes.indexOf(n), canMove = S.filter === "all";
+  const i = l.notes.indexOf(n), canMove = S.filter === "all" && !searchTerms(S.lessonQuery).length;
   return `<div class="actionbar" role="toolbar" aria-label="Note actions"><div class="wrap">
     <div class="chips" style="padding:0" role="group" aria-label="Note type">${["", ...CHIP_ORDER, "rewatch"].map(k => `<button class="chip ${k}" data-act="retag" data-tag="${k}" aria-pressed="${n.tag === k}">${k ? TAGS[k].chip : "Plain"}</button>`).join("")}</div>
     <div class="ab-row">
@@ -1267,6 +1374,12 @@ document.addEventListener("click", async e => {
     }
     case "quizRestart": S.quiz = null; render(); break;
     case "news": openNews(); break;
+    case "jump": openLesson(el.dataset.id, el.dataset.tab || "organize", el.dataset.note ? { jump: el.dataset.note } : {}); break;
+    case "openSearch": openLesson(el.dataset.id, "organize", { query: S.search }); break;
+    case "clearSearch": {
+      const inp = $("#" + el.dataset.for); if (!inp) break;
+      inp.value = ""; inp.dispatchEvent(new Event("input", { bubbles: true })); inp.focus(); break;
+    }
     case "dumpStart": try { ensureAudio(); } catch {} S.dump = { lessonId: l.id, phase: "write", start: Date.now() }; S.quiz = null; render(); startDumpTimer(); $("#dumpText")?.focus(); window.scrollTo(0, 0); break;
     case "dumpCancel": S.dump = null; stopDumpTimer(); render(); break;
     case "dumpCheck": { const t = $("#dumpText"); if (t) l.dump = t.value; l.dumpAt = Date.now(); l.dumpMarks = {}; persist(l); S.dump = { lessonId: l.id, phase: "compare" }; stopDumpTimer(); render(); window.scrollTo(0, 0); break; }
@@ -1307,7 +1420,11 @@ document.addEventListener("keydown", e => {
   if (e.target.id === "clockEdit" && e.key === "Escape") { S.editingTime = false; render(); }
   if (e.target.id === "editText" && e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); $('[data-act="editSave"]')?.click(); }
   if (e.target.matches?.('[data-act="select"]') && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); e.target.click(); }
-  if (e.key === "Escape" && $("#layer").innerHTML) $("#layer").innerHTML = "";
+  if (e.key === "Escape" && $("#layer").innerHTML) { $("#layer").innerHTML = ""; return; }
+  if (e.key === "Escape" && (e.target.id === "libSearch" || e.target.id === "noteSearch") && e.target.value) { e.preventDefault(); e.target.value = ""; e.target.dispatchEvent(new Event("input", { bubbles: true })); }
+  if (e.key === "/" && !e.metaKey && !e.ctrlKey && !/^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName) && !e.target.isContentEditable) {
+    const box = $("#libSearch") || $("#noteSearch"); if (box) { e.preventDefault(); box.focus(); box.select(); }
+  }
 });
 document.addEventListener("submit", e => {
   e.preventDefault();
@@ -1323,8 +1440,20 @@ function submitDraft() {
   refreshRecent(); d.focus(); scrollSheetEnd();
 }
 let metaTimer;
+let searchTimer;
 document.addEventListener("input", e => {
   const l = cur();
+  if (e.target.id === "libSearch" || e.target.id === "noteSearch") {
+    const lib = e.target.id === "libSearch", v = e.target.value;
+    if (lib) S.search = v; else S.lessonQuery = v;
+    const c = e.target.parentElement.querySelector(".clear"); if (c) c.hidden = !v;
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => {
+      if (lib) { const b = $("#libBody"); if (b) b.innerHTML = libListHTML([...S.lessons.values()].sort((a, b2) => b2.updatedAt - a.updatedAt)); }
+      else { if (S.selected && searchTerms(v).length) { S.selected = null; const bar = $(".actionbar"); if (bar) render(), $("#noteSearch")?.focus(); } refreshOrg(); }
+    }, 120);
+    return;
+  }
   if (e.target.id === "draft") { if (!S.draft && e.target.value) S.draftT = elapsed(); S.draft = e.target.value; if (!e.target.value) S.draftT = null; autoGrow(e.target); }
   if (l && (e.target.id === "metaTitle" || e.target.id === "metaCourse")) {
     l[e.target.id === "metaTitle" ? "title" : "course"] = e.target.value;
@@ -1346,7 +1475,7 @@ document.addEventListener("focusout", e => {
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && S.clock.running) { try { navigator.wakeLock?.request("screen").then(w => S.wake = w).catch(() => {}); } catch {} } });
 
 /* Read-only hook for the automated checks in tests/. */
-window.SCRIBBLE = Object.freeze({ CHANGES, sectionGroups, buildDeck, normalize, toMarkdown, glossary, exportModel, makePDF, makeDOCX, toWin, crc32 });
+window.SCRIBBLE = Object.freeze({ CHANGES, searchTerms, matchesAll, hl, searchLessons, sectionGroups, buildDeck, normalize, toMarkdown, glossary, exportModel, makePDF, makeDOCX, toWin, crc32 });
 
 /* ---------- boot ---------- */
 loadLocal();

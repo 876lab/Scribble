@@ -151,6 +151,74 @@ const URL_ = process.env.SITE || 'file://' + path.resolve(__dirname, '..', 'inde
   ok((await page.inputValue('#dumpText')) === 'Draft that should survive', 'next brain dump starts from the saved text');
   await page.click('text=Cancel');
 
+  // ---- Search ----
+  { const L = await page.evaluate(() => { const { searchTerms, hl, matchesAll } = window.SCRIBBLE; return [searchTerms('"Electron transport"  ATP  '), hl('Café au lait', ['cafe']), hl('<b>x</b>', ['b']), matchesAll('The Krebs cycle', ['cycle', 'krebs']), matchesAll('The Krebs cycle', ['krebs', 'atp']), hl('Résumé résumé', ['resume'])]; });
+    ok(JSON.stringify(L[0]) === '["electron transport","atp"]', 'search words and "quoted phrases" are read correctly');
+    ok(L[1] === '<mark class="hl">Café</mark> au lait', 'accents ignored and the original text highlighted');
+    ok(L[2] === '&lt;<mark class="hl">b</mark>&gt;x&lt;/<mark class="hl">b</mark>&gt;', 'highlighting never lets note text become page code');
+    ok(L[3] === true && L[4] === false, 'every word must appear');
+    ok(L[5] === '<mark class="hl">Résumé</mark> <mark class="hl">résumé</mark>', 'every occurrence highlighted'); }
+  await page.click('[data-act=home]');
+  await page.click('text=+ New lesson'); await page.fill('#nfTitle', 'Photosynthesis'); await page.fill('#nfCourse', 'BIO 101'); await page.click('text=Start taking notes');
+  for (const x of ['# Light reactions', 'Chlorophyll absorbs light in the thylakoid', 'Café-au-lait colour example', 'Plant cells have mitochondria too', '<img src=x onerror="window.__xss=1">']) { await page.fill('#draft', x); await page.press('#draft', 'Enter'); }
+  await page.click('[data-act=home]');
+  ok(await page.isVisible('#libSearch'), 'search box on the home screen');
+  const libSearch = async q => { await page.fill('#libSearch', q); await page.waitForTimeout(250); };
+  await libSearch('mitochondria');
+  ok(/in 2 lessons/.test(await page.textContent('#searchCount')), 'search finds matches across lessons: ' + await page.textContent('#searchCount'));
+  ok((await page.locator('#libBody mark.hl').allInnerTexts()).every(x => x.toLowerCase() === 'mitochondria') && await page.locator('#libBody mark.hl').count() >= 2, 'matches highlighted');
+  ok(await page.locator('.lesson-list').count() === 0, 'lesson list replaced by results while searching');
+  ok(await page.$eval('#libBody mark.hl', el => getComputedStyle(el).display) === 'inline', 'highlights stay inside the sentence');
+  ok(await page.isVisible('[data-act=clearSearch][data-for=libSearch]'), 'clear button shows while searching');
+  ok(!(await overflow()), 'search results: no sideways scrolling');
+  await page.screenshot({ path: OUT + '/search.png', fullPage: true });
+  await libSearch('CAFE');
+  ok(/^1 match in 1 lesson/.test(await page.textContent('#searchCount')) && (await page.locator('#libBody mark.hl').first().innerText()) === 'Café', 'capitals and accents ignored');
+  await libSearch('glucose oxygen');
+  ok(await page.isVisible('#libBody >> text=Overall: glucose'), 'two words find the note containing both');
+  await libSearch('"electron transport"');
+  ok(await page.locator('.hit').count() >= 1, 'quoted phrase matches');
+  await libSearch('"transport electron"');
+  ok(await page.isVisible('text=No matches for'), 'quoted words must appear together');
+  await libSearch('onerror');
+  ok(await page.isVisible('#libBody >> text=<img src=x'), 'unsafe-looking note text shows as plain text');
+  ok(await page.locator('#libBody img').count() === 0 && !(await page.evaluate(() => window.__xss)), 'unsafe-looking note text never runs');
+  await libSearch('three stages');
+  ok(await page.isVisible('#libBody .hit b >> text=The three stages'), 'section headings are searched too');
+  await libSearch('krebs');
+  await page.locator('.hit').first().click();
+  ok(await page.isVisible('#noteSearch') && await page.getAttribute('[data-tab=organize]', 'aria-selected') === 'true', 'tapping a match opens the lesson in Organize');
+  { const j = page.locator('.note.jump'); ok(await j.count() === 1 && /Krebs/i.test(await j.innerText()), 'the matching note is marked');
+    ok(await j.evaluate(el => { const r = el.getBoundingClientRect(); return r.top >= 0 && r.bottom <= innerHeight; }), 'the matching note is scrolled into view'); }
+  await page.click('[data-act=home]');
+  ok((await page.inputValue('#libSearch')) === 'krebs' && await page.locator('.res').count() >= 1, 'home search stays until cleared');
+  await page.locator('.res-head').first().click();
+  ok((await page.inputValue('#noteSearch')) === 'krebs' && /<b>2<\/b> notes match/.test(await page.innerHTML('#orgHint')) && await page.locator('#orgList mark.hl').count() === 2, 'opening a result carries the search into the lesson');
+  // Search within a lesson
+  const noteSearch = async q => { await page.fill('#noteSearch', q); await page.waitForTimeout(250); };
+  await noteSearch('glycolysis');
+  { const rows = await page.locator('#orgList .note').allInnerTexts();
+    ok(rows.length === 3 && /The three stages/.test(rows[0]) && rows.slice(1).every(r => /glycolysis/i.test(r)), 'lesson search shows matching notes with their section: ' + rows.length);
+    ok(/2<\/b> notes match/.test(await page.innerHTML('#orgHint')), 'lesson search counts the matches'); }
+  await page.locator('#orgList .note:not(.section)').first().click();
+  ok(await page.isDisabled('.actionbar [data-act=mv][data-d="-1"]') && await page.isDisabled('.actionbar [data-act=mv][data-d="1"]'), 'moving notes is off while searching');
+  await page.locator('#orgList .note:not(.section)').first().click();
+  await page.click('[data-act=filter][data-f=key]');
+  ok((await page.locator('#orgList .note:not(.section)').allInnerTexts()).every(r => /Key idea/i.test(r) && /glycolysis/i.test(r)) && await page.locator('#orgList .note:not(.section)').count() === 1, 'search and type filter work together');
+  await page.click('[data-act=filter][data-f=all]');
+  await noteSearch('zzzz');
+  ok(await page.isVisible('#orgList >> text=No notes match'), 'lesson search says when nothing matches');
+  await page.click('[data-act=clearSearch][data-for=noteSearch]'); await page.waitForTimeout(250);
+  { const total = await page.evaluate(() => JSON.parse(localStorage.getItem('scribble.v1.lessons')).find(x => x.example).notes.length);
+    ok(await page.locator('#orgList .note').count() === total && await page.isHidden('[data-act=clearSearch][data-for=noteSearch]'), 'clearing the search shows every note again'); }
+  await noteSearch('atp'); await page.press('#noteSearch', 'Escape'); await page.waitForTimeout(250);
+  ok((await page.inputValue('#noteSearch')) === '', 'Escape clears the search');
+  await page.click('[data-act=home]'); await page.click('[data-act=clearSearch][data-for=libSearch]'); await page.waitForTimeout(250);
+  ok(await page.locator('.lesson').count() === 2, 'clearing the home search brings back the lesson list');
+  await page.keyboard.press('/');
+  ok(await page.evaluate(() => document.activeElement.id) === 'libSearch', 'the / key jumps to search');
+  await page.locator('.lesson', { hasText: 'Cellular respiration' }).click();
+
   // ---- Export: PDF and Word ----
   await page.click('[data-tab=summary]');
   ok(await page.isVisible('.gloss >> text=Cellular respiration'), 'Summary shows a Key terms table built from definitions');
@@ -202,7 +270,7 @@ const URL_ = process.env.SITE || 'file://' + path.resolve(__dirname, '..', 'inde
   await page.click('[data-act=home]');
   await page.screenshot({ path: OUT + '/home-dark.png' });
   await page.reload(); await page.waitForSelector('.hero');
-  ok(await page.locator('.lesson').count() === 1, 'lesson survives a reload');
+  ok(await page.locator('.lesson').count() === 2, 'lessons survive a reload');
 
   ok(errors.length === 0, 'no page errors: ' + errors.join(' | '));
   await browser.close();

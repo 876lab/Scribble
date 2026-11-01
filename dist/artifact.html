@@ -211,6 +211,10 @@ textarea.field{resize:vertical;line-height:1.5}
 .flash .src{font-size:.72rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:700}
 .flash .q{font-family:var(--f-display);font-variation-settings:"CASL" .4;font-weight:700;font-size:1.25rem;line-height:1.35;text-wrap:balance;white-space:pre-wrap}
 .flash .a{border-top:2px dashed var(--rule);padding-top:var(--s3);white-space:pre-wrap;font-size:1.02rem}
+.ans-box{display:flex;flex-direction:column;gap:6px}
+.ans-box textarea{min-height:88px;font-size:1rem}
+.flash .mine{white-space:pre-wrap;background:var(--paper);border-radius:10px;padding:10px 12px;font-size:1rem}
+.mine-lbl{display:block;font-size:.7rem;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:4px}
 .flash .tap{font-size:.84rem;color:var(--accent);font-weight:700}
 .progress{display:flex;justify-content:space-between;font-size:.86rem;color:var(--muted)}
 .score{display:flex;gap:var(--s4)}
@@ -324,6 +328,11 @@ const CHIP_ORDER = ["key", "def", "ex", "q", "test", "section"];
 
 /* What's new: newest first. Each run adds one entry at the top (id = date + short slug). */
 const CHANGES = [
+  { id: "2026-10-31-answers", d: "2026-10-31", t: "Type your answers in Quiz me", b: [
+    "Each quiz card now has a box to type your answer before you check it.",
+    "Show answer puts your answer above the one from your notes, so you can compare them.",
+    "Section cards no longer show a stray colon, or 00:00 when the clock wasn't running."
+  ] },
   { id: "2026-10-31-search", d: "2026-10-31", t: "Search your notes", b: [
     "Search all your lessons from the home screen: matches show highlighted, with the video time and section.",
     "Tap a match to jump straight to that note. Organize also has a search box for the lesson you're in.",
@@ -873,9 +882,9 @@ function buildDeck(l) {
     }
   });
   sectionGroups(l).filter(g => g.real).forEach(g => cards.push({
-    front: `What do you remember about “${g.title}”?`,
+    front: `What do you remember about “${g.title.replace(/[\s:;,.–—-]+$/, "") || g.title}”?`,
     back: g.notes.map(n => "• " + n.text).join("\n"),
-    src: "Section recall · " + fmt(g.t), sec: g.id
+    src: "Section recall" + (g.t > 0 ? " · " + fmt(g.t) : ""), sec: g.id
   }));
   return cards;
 }
@@ -926,14 +935,15 @@ function quizHTML(l) {
     <p class="score" style="justify-content:center"><span class="got">Got it <b>${q.got}</b></span><span class="miss">Missed <b>${q.missed.length}</b></span></p>
     <p class="muted">${q.missed.length ? "Go over the ones you missed now, then come back later today. Spacing your practice helps it last." : "Nice. Try again tomorrow to make it stick."}</p>
     <div class="row-wrap" style="justify-content:center">${q.missed.length ? `<button class="btn primary" data-act="quizMissed">Practice the ${q.missed.length} missed</button>` : ""}<button class="btn" data-act="quizRestart">Start over</button></div></section></div>`;
-  const c = deck[q.order[q.i]];
+  const c = deck[q.order[q.i]], typed = (q.typed || {})[q.order[q.i]] || "";
   return `<div class="stack">${q.i === 0 && !q.flipped ? dump : ""}
     <div class="progress"><span>Card <b class="mono">${q.i + 1}</b> of ${q.order.length}</span><span class="score"><span class="got">✓ ${q.got}</span><span class="miss">✗ ${q.missed.length}</span></span></div>
     <button class="card flash" data-act="flip" aria-live="polite">
       <span class="src">${esc(c.src)}</span>
       <span class="q">${esc(c.front)}</span>
-      ${q.flipped ? `<span class="a">${esc(c.back)}</span>` : `<span class="tap">Say or write your answer, then tap to check</span>`}
+      ${q.flipped ? `${typed.trim() ? `<span class="mine"><span class="mine-lbl">Your answer</span>${esc(typed)}</span>` : ""}<span class="a">${typed.trim() ? `<span class="mine-lbl">From your notes</span>` : ""}${esc(c.back)}</span>` : `<span class="tap">Type your answer below, or say it out loud. Then tap Show answer to check.</span>`}
     </button>
+    ${q.flipped ? "" : `<label class="ans-box"><span class="label" style="margin:0">Your answer</span><textarea class="field" id="quizAns" rows="3" placeholder="Type what you remember… (optional)" enterkeyhint="done">${esc(typed)}</textarea></label>`}
     ${q.flipped ? `<div class="row-wrap" style="justify-content:center"><button class="btn danger" data-act="grade" data-g="0">✗ Missed it</button><button class="btn primary" data-act="grade" data-g="1">✓ Got it</button></div>` : `<div class="row-wrap" style="justify-content:center"><button class="btn primary" data-act="flip">Show answer</button></div>`}
     <div class="row-wrap" style="justify-content:center"><button class="btn small ghost" data-act="quizShuffle">Shuffle</button></div>
   </div>`;
@@ -1418,6 +1428,7 @@ document.addEventListener("keydown", e => {
   if (e.target.id === "draft" && e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); submitDraft(); }
   if (e.target.id === "clockEdit" && e.key === "Enter") { e.preventDefault(); e.target.blur(); }
   if (e.target.id === "clockEdit" && e.key === "Escape") { S.editingTime = false; render(); }
+  if (e.target.id === "quizAns" && e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); $('[data-act="flip"].btn')?.click(); return; }
   if (e.target.id === "editText" && e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); $('[data-act="editSave"]')?.click(); }
   if (e.target.matches?.('[data-act="select"]') && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); e.target.click(); }
   if (e.key === "Escape" && $("#layer").innerHTML) { $("#layer").innerHTML = ""; return; }
@@ -1460,6 +1471,7 @@ document.addEventListener("input", e => {
     clearTimeout(metaTimer); metaTimer = setTimeout(() => { if (!l.title.trim()) l.title = "Untitled lesson"; persist(l); updateTopText(); }, 400);
   }
   if (l && e.target.id === "dumpText") { l.dump = e.target.value; }
+  if (e.target.id === "quizAns" && S.quiz) { (S.quiz.typed ||= {})[S.quiz.order[S.quiz.i]] = e.target.value; }
   if (l && e.target.id === "mySummary") { l.mySummary = e.target.value; clearTimeout(metaTimer); metaTimer = setTimeout(() => { persist(l); updateTopText(); }, 600); }
 });
 document.addEventListener("change", e => {

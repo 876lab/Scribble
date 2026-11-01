@@ -51,5 +51,6 @@ The working plan for the weekly update runs (Fridays, 3:20am Jamaica time, after
 - [ ] Re-record the walkthrough video when the home screen or Quiz me changes enough that it looks out of date (fonts couldn't load in the recording environment on 26 Oct; use them if they can).
 
 ## Notes from runs
+- 2026-10-31 (daytime): The owner's real lessons are long (one has 153 notes) and some were typed without the lesson clock, so every time reads 00:00. Hide 00:00 times where they add nothing, and keep long lessons fast and easy to scan when building new features.
 - 2026-10-31 (daytime, owner request): PDF and Word export built and tested. The PDF uses standard fonts (no embedding), so non-Latin scripts and emoji print as "?"; the Word file keeps everything. If the owner ever writes notes in another script, embed a font or point him to Word export.
 - 2026-10-30 (setup run, with the owner): The scheduled runs can't see the owner's weekly usage meter (no tool or token exposes it), so the 75% pause is done by pausing the scheduled tasks. GitHub repository settings, Pages settings and topics can't be changed from a Claude session (proxy refuses); the owner did those by hand. The live site (github.io) and the npm registry aren't reachable from the session, so local tests use the global Playwright and the live site is checked by the GitHub health workflow instead.

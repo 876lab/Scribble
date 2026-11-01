@@ -58,6 +58,7 @@ const URL_ = process.env.SITE || 'file://' + path.resolve(__dirname, '..', 'inde
     const N = (id, tag, text, t, level = 0) => ({ id, tag, text, t, level });
     const a = normalize({ id: 'a', title: 'Cells', notes: [N('x', '', 'Intro idea', 5), N('s1', 'section', 'Parts', 10), N('n1', 'key', 'Nucleus holds DNA', 20, 1), N('r', 'rewatch', 'Missed something here', 25, 1), N('n2', 'def', 'Ribosome: makes protein', 30, 1), N('s2', 'section', 'Empty part', 40), N('s3', 'section', 'Energy', 50), N('n3', 'test', 'Mitochondria make ATP', 60, 1)] });
     const g = sectionGroups(a), d = buildDeck(a);
+    const c2 = buildDeck(normalize({ id: 'c', title: 'Colon', notes: [N('s', 'section', 'Data Sources:', 0), N('k', '', 'Surveys', 0, 1)] })).find(x => x.sec);
     const b = normalize({ id: 'b', title: 'No sections', notes: [N('m1', '', 'one', 1), N('m2', 'rewatch', 'Missed something here', 2), N('m3', 'q', 'why?', 3)] });
     const gb = sectionGroups(b), db = buildDeck(b);
     const old = normalize({ id: 'o', title: 'Old', notes: [] });
@@ -68,6 +69,7 @@ const URL_ = process.env.SITE || 'file://' + path.resolve(__dirname, '..', 'inde
       defCard: d.some(c => c.front === 'Define: Ribosome'),
       noRewatch: !g.some(x => x.notes.some(n => n.tag === 'rewatch')),
       gb: gb.map(x => [x.id, x.title, x.notes.length, x.real]), dbSec: db.filter(c => c.sec).length, dbQ: db.filter(c => c.src === 'Your question').length,
+      colon: c2.front === 'What do you remember about “Data Sources”?' && c2.src === 'Section recall',
       oldOk: old.dump === '' && old.dumpAt === 0 && JSON.stringify(old.dumpMarks) === '{}',
       badMarks: JSON.stringify(normalize({ id: 'z', dumpMarks: ['x'] }).dumpMarks),
       md: /## Brain dump/.test(md) && /Nucleus and DNA/.test(md)
@@ -77,6 +79,7 @@ const URL_ = process.env.SITE || 'file://' + path.resolve(__dirname, '..', 'inde
   ok(logic.noRewatch, 'rewatch markers are not part of any section');
   ok(logic.secCards.length === 2 && logic.secCards[0][0] === 's1' && logic.secCards[0][1] === 'What do you remember about “Parts”?' && logic.secCards[0][2] === '• Nucleus holds DNA\n• Ribosome: makes protein', 'one recall card per real section with its notes as the answer');
   ok(logic.defCard, 'definition cards still made');
+  ok(logic.colon, 'section card drops a trailing colon and hides an unset 00:00 time');
   ok(JSON.stringify(logic.gb) === JSON.stringify([['_start', 'No sections', 2, false]]) && logic.dbSec === 0 && logic.dbQ === 1, 'lesson without sections: one group named after the lesson, no section cards, question card kept');
   ok(logic.oldOk && logic.badMarks === '{}', 'older saved lessons load with empty brain-dump fields');
   ok(logic.md, 'export includes the brain dump');
@@ -138,6 +141,19 @@ const URL_ = process.env.SITE || 'file://' + path.resolve(__dirname, '..', 'inde
   ok(/Card 1 of 1/.test(await page.innerText('.progress')), 'missed-section quiz has just the missed one');
   await page.click('text=Show answer'); await page.click('[data-act=grade][data-g="1"]');
   ok(await page.isVisible('text=Round finished'), 'missed-section round finishes');
+  // Answer box on quiz cards
+  await page.click('text=Start over');
+  ok(await page.isVisible('#quizAns'), 'quiz card has a box to type the answer');
+  await page.fill('#quizAns', 'My typed answer\nsecond line');
+  await page.click('.btn[data-act=flip]');
+  ok(await page.isVisible('.flash .mine >> text=My typed answer') && await page.isVisible('.flash .mine-lbl >> text=From your notes'), 'Show answer puts the typed answer above the real one');
+  ok(await page.isHidden('#quizAns'), 'answer box hides once the answer shows');
+  await page.click('[data-act=grade][data-g="0"]');
+  ok((await page.inputValue('#quizAns')) === '', 'next card starts with an empty answer box');
+  await page.fill('#quizAns', 'quick'); await page.press('#quizAns', 'Control+Enter');
+  ok(await page.isVisible('.flash .mine >> text=quick'), 'Ctrl+Enter in the answer box shows the answer');
+  await page.screenshot({ path: OUT + '/quiz-answer.png' });
+  await page.reload(); await page.waitForSelector('.hero'); await page.click('.lesson');
   await page.click('[data-tab=summary]'); await page.click('[data-tab=quiz]');
   ok(await page.isVisible('text=Last one') && await page.isVisible('text=See last check'), 'quiz tab remembers the last brain dump');
   await page.click('text=See last check');

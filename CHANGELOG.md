@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-10-31 (daytime, owner question): Type your answers in Quiz me
+- The owner asked where to write his answer: the card said "Say or write your answer" but there was no box. Each card now has a "Your answer" box under it (optional; kept while the round lasts, not saved). Show answer (or Ctrl/⌘+Enter in the box) shows "Your answer" above "From your notes" so the two can be compared; the next card starts with an empty box. Card prompt now reads "Type your answer below, or say it out loud. Then tap Show answer to check."
+- Section recall cards drop trailing punctuation from the section title ("Data Sources:" → "Data Sources") and leave out the time when it is 00:00 (notes typed without the clock running).
+- Tests: 119 browser checks (was 113).
+
 ## 2026-10-31 (daytime, owner request): Keyword search
 - **Home screen search** ("Search all notes", shown once there are lessons): looks in note text, section headings, lesson titles and courses, your summary, brain dump and Claude's summary, practice questions and key terms. Results replace the lesson list: "N matches in M lessons", each lesson with up to 5 hits (video time, section, note type, matching words highlighted), "Show all N in this lesson". Lessons with the most hits come first.
 - **Tap a hit** to open the lesson in Organize with that note scrolled into view and briefly highlighted (summary hits open Summary, brain dump hits open Quiz me). Tapping the lesson heading opens Organize with the search carried over.

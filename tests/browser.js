@@ -275,6 +275,93 @@ const URL_ = process.env.SITE || 'file://' + path.resolve(__dirname, '..', 'inde
   const enc = await page.evaluate(() => [window.SCRIBBLE.toWin('“Café” — ★ → μ 🧠'), window.SCRIBBLE.crc32(new TextEncoder().encode('123456789'))]);
   ok(enc[0] === '\x93Café\x94 \x97 * -> \xB5 ?' && enc[1] === 0xCBF43926, 'PDF text encoding and zip checksum are correct: ' + JSON.stringify(enc[0]));
 
+  // ---- Select several notes, move/delete together, undo ----
+  { const mm = await page.evaluate(() => { const { moveMany, canMoveMany } = window.SCRIBBLE; const mk = ids => ({ notes: [...ids].map(id => ({ id })) }); const ord = l => l.notes.map(n => n.id).join('');
+      const a = mk('abcdef'); moveMany(a, new Set(['c', 'd']), -1); const r1 = ord(a);
+      const b = mk('abcdef'); moveMany(b, new Set(['a', 'b', 'e']), -1); const r2 = ord(b);
+      const c = mk('abcdef'); moveMany(c, new Set(['b', 'd']), 1); const r3 = ord(c);
+      return [r1, r2, r3, canMoveMany(mk('abc'), new Set(['a', 'b']), -1), canMoveMany(mk('abc'), new Set(['b', 'c']), 1), canMoveMany(mk('abc'), new Set(['b', 'c']), -1)]; });
+    ok(mm[0] === 'acdbef', 'a block of selected notes moves up together: ' + mm[0]);
+    ok(mm[1] === 'abcedf', 'notes already at the top stay, the others move: ' + mm[1]);
+    ok(mm[2] === 'acbedf', 'separate selected notes each move down: ' + mm[2]);
+    ok(mm[3] === false && mm[4] === false && mm[5] === true, 'up/down know when a selection cannot move'); }
+  await page.click('[data-tab=organize]');
+  const exNotes = async () => (await lessons()).find(x => x.example).notes;
+  const before = await exNotes();
+  ok(await page.isVisible('#multiBtn'), 'Select several button in Organize');
+  await page.click('#multiBtn');
+  ok(await page.isVisible('.actionbar.multi') && /Tap notes to select/.test(await page.innerText('#selCount')), 'select mode shows its toolbar');
+  ok(await page.locator('#orgList .note.pick[role=checkbox]').count() === before.length, 'every note gets a tick box');
+  const pickIdx = [3, 4, 5];
+  for (const i of pickIdx) await page.locator(`#orgList .note[data-id="${before[i].id}"]`).click();
+  ok(/3 notes selected/.test(await page.innerText('#selCount')), 'counts selected notes');
+  ok(await page.locator('#orgList .note[aria-checked=true]').count() === 3, 'selected notes are ticked');
+  await page.click('[data-act=mvMany][data-d="-1"]');
+  { const n = (await exNotes()).map(x => x.id); ok(n.slice(2, 5).join() === pickIdx.map(i => before[i].id).join() && n[5] === before[2].id, 'Up moves the 3 notes together'); }
+  await page.click('[data-act=mvMany][data-d="1"]'); await page.click('[data-act=mvMany][data-d="1"]');
+  { const n = (await exNotes()).map(x => x.id); ok(n.slice(4, 7).join() === pickIdx.map(i => before[i].id).join(), 'Down moves them together, twice'); }
+  await page.click('[data-act=mvMany][data-d="-1"]');
+  ok(JSON.stringify((await exNotes()).map(x => x.id)) === JSON.stringify(before.map(x => x.id)), 'back where they started');
+  await page.click('[data-act=retagMany][data-tag=key]');
+  ok((await exNotes()).filter(x => pickIdx.map(i => before[i].id).includes(x.id)).every(x => x.tag === 'key'), 'one tap retypes all selected notes');
+  const tagged = await exNotes();
+  await page.click('[data-act=delMany]');
+  ok((await exNotes()).length === before.length - 3, 'Delete removes all selected notes');
+  ok(await page.isVisible('.toast >> text=3 notes deleted') && await page.isVisible('.toast [data-act=undo]'), 'message says how many were deleted, with Undo');
+  ok(await page.isVisible('#undoBtn'), 'Undo delete button stays in Organize');
+  ok(await page.evaluate(() => { const a = document.querySelector('.toast').getBoundingClientRect(), b = document.querySelector('.actionbar').getBoundingClientRect(); return a.bottom <= b.top; }), 'the message sits above the toolbar, not on it');
+  await page.click('.toast [data-act=undo]');
+  ok(JSON.stringify(await exNotes()) === JSON.stringify(tagged), 'Undo puts the notes back exactly where they were');
+  ok(await page.isHidden('#undoBtn'), 'nothing left to undo');
+  // two deletes in a row, undone one at a time with the Organize button
+  const ids = (await exNotes()).map(x => x.id);
+  await page.locator(`#orgList .note[data-id="${ids[1]}"]`).click(); await page.click('[data-act=delMany]');
+  await page.locator(`#orgList .note[data-id="${ids[7]}"]`).click(); await page.locator(`#orgList .note[data-id="${ids[8]}"]`).click(); await page.click('[data-act=delMany]');
+  ok((await exNotes()).length === ids.length - 3 && /Undo delete \(2\)/.test(await page.innerText('#undoBtn')), 'two deletes can be undone: ' + await page.innerText('#undoBtn'));
+  await page.waitForTimeout(8200);
+  ok(await page.isVisible('#undoBtn'), 'Undo delete is still there after the message goes away');
+  await page.click('#undoBtn'); ok((await exNotes()).length === ids.length - 1, 'first undo brings back the latest delete');
+  await page.click('#undoBtn'); ok(JSON.stringify((await exNotes()).map(x => x.id)) === JSON.stringify(ids), 'second undo brings back the earlier one, in order');
+  await page.locator(`#orgList .note[data-id="${ids[0]}"]`).click();
+  ok(await page.isDisabled('[data-act=mvMany][data-d="-1"]'), 'Up is off when the selection is already at the top');
+  await page.screenshot({ path: OUT + '/multi-select.png' });
+  ok(!(await overflow()), 'select mode: no sideways scrolling');
+  await page.click('.actionbar [data-act=multiToggle]');
+  ok(await page.isHidden('.actionbar') && await page.locator('#orgList .note.pick').count() === 0, 'Done leaves select mode');
+  // From a single note: Select, then edit-to-empty is undoable
+  await page.locator(`#orgList .note[data-id="${ids[2]}"]`).click();
+  await page.click('.actionbar [data-act=multiFrom]');
+  ok(/1 note selected/.test(await page.innerText('#selCount')), 'Select on a note starts select mode with that note ticked');
+  await page.click('.actionbar [data-act=multiToggle]');
+  await page.locator(`#orgList .note[data-id="${ids[2]}"]`).click(); await page.click('.actionbar [data-act=edit]');
+  await page.fill('#editText', ''); await page.click('[data-act=editSave]');
+  ok((await exNotes()).length === ids.length - 1 && await page.isVisible('#undoBtn'), 'emptying a note deletes it, and that can be undone too');
+  await page.click('#undoBtn'); ok((await exNotes()).length === ids.length, 'restored');
+
+  // ---- Take notes: add notes in between ----
+  await page.click('[data-tab=capture]');
+  ok(await page.isVisible('text=Tip: tap any note'), 'Take notes explains how to add in between');
+  if (await page.isVisible('[data-act=showAll]')) await page.click('[data-act=showAll]');
+  const cap0 = await exNotes(), anchor = cap0.find(x => x.tag !== 'section' && x.level === 2) || cap0[3], ai = cap0.indexOf(cap0.find(x => x.id === anchor.id));
+  await page.locator(`#recent .note[data-id="${anchor.id}"]`).click();
+  ok(await page.isVisible('#insBanner') && (await page.innerText('#insBanner')).includes(anchor.text.slice(0, 20)), 'banner shows where new notes will go');
+  ok(await page.locator(`#recent .note.anchor[data-id="${anchor.id}"]`).count() === 1, 'the chosen note is marked');
+  ok(await page.evaluate(() => document.activeElement.id) === 'draft', 'cursor jumps to the note box');
+  await page.fill('#draft', 'Inserted one'); await page.press('#draft', 'Enter');
+  await page.fill('#draft', 'Inserted two'); await page.press('#draft', 'Enter');
+  { const n = await exNotes(); ok(n[ai + 1].text === 'Inserted one' && n[ai + 2].text === 'Inserted two', 'new notes go right below the chosen note, in order');
+    ok(n[ai + 1].t === anchor.t && n[ai + 1].level === anchor.level, 'they take its video time and indent');
+    ok(n.length === cap0.length + 2, 'nothing else changed'); }
+  ok(await page.locator('#recent .note.anchor', { hasText: 'Inserted two' }).count() === 1, 'the insert point follows the newest note');
+  { const sec = cap0.find(x => x.tag === 'section'); await page.locator(`#recent .note[data-id="${sec.id}"]`).click();
+    await page.fill('#draft', 'Right under the heading'); await page.press('#draft', 'Enter');
+    const n = await exNotes(), si = n.findIndex(x => x.id === sec.id); ok(n[si + 1].text === 'Right under the heading' && n[si + 1].level === 1, 'adding below a section heading makes a point under it'); }
+  await page.click('[data-act=insertCancel]');
+  ok(await page.isHidden('#insBanner'), '"Add at the end instead" turns it off');
+  await page.fill('#draft', 'Back at the end'); await page.press('#draft', 'Enter');
+  ok((await exNotes()).slice(-1)[0].text === 'Back at the end', 'new notes go at the end again');
+  await page.screenshot({ path: OUT + '/insert.png' });
+
   // ---- Dark theme and reload ----
   await page.emulateMedia({ colorScheme: 'dark' });
   await page.click('[data-tab=quiz]');

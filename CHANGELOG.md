@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-11-02 (owner request): Select several notes, undo deletes, add notes in between
+- **Select several (Organize):** a "Select several" button (or Select on a note's toolbar) turns on tick boxes. The toolbar shows "N notes selected", note-type chips that retype all of them, Up, Down, Outdent, Indent and Delete N, plus Clear and Done. Moving works like a block: selected notes move one step together, notes already at the edge stay put, and Up/Down switch off when nothing can move (`moveMany()`, `canMoveMany()`). Moving is off while a search or filter is on, as before. The page keeps its scroll position after each action.
+- **Undo deletes:** every delete (one note, several, or emptying a note in Edit) is kept for undo, up to 30 in a row, until the app is closed (`deleteNotes()`, `undoDelete()`). The message ("3 notes deleted · Undo") now stays 8 seconds and sits above the toolbar; an "↶ Undo delete (N)" button stays in Organize after the message goes. Undo puts notes back exactly where they were, newest delete first.
+- **Add notes in between (Take notes):** tap any note to add new notes right below it. A banner shows "Adding below: …" with "Add at the end instead". New notes take the chosen note's video time and indent (a point under a section heading); each new note becomes the next insert point, so a run of notes stays in order. "Missed that" also goes in at that point. Tapping the same note again, or switching tabs, turns it off.
+- The deleted/restored message is readable in dark mode (underlined Undo instead of yellow on light).
+- Tests: 177 browser checks (was 137).
+
 ## 2026-10-31 (daytime, owner request): Home screen facelift
 - Returning users (one or more lessons) get a working home screen instead of the intro: "Your notebook" with today's date and totals, "+ New lesson", search, then **Pick up where you left off** (the most recently used lesson, its study steps, and one button for the next step), then **Your lessons**.
 - **Next step** follows the study routine (`nextStep()`): no notes → Take notes; no brain dump → Start brain dump; missed sections → Review what I missed; not quizzed → Quiz me; all done → Quiz me again (quiz again tomorrow).

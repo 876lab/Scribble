@@ -12,7 +12,7 @@ Instead of typing while the video talks, Scribble helps you **watch a chunk, pau
 2. **Press Start when you press play.** The lesson clock stamps each note with the video time. Tap the time to match your video if you skip around.
 3. **Pause when the reminder shows.** By default it appears every 5 minutes (you can change or turn it off). Stop the video and write the main point in one line.
 4. **Lost the thread? Tap "Missed that."** It marks the moment to rewatch so you can keep going instead of falling behind.
-5. **After the video, open Organize.** Tap any note to move it, indent it, change its type, or edit it.
+5. **After the video, open Organize.** Tap any note to move it, indent it, change its type, or edit it. Tap **Select several** to move or delete a group of notes at once; **Undo delete** brings back anything deleted by accident. In Take notes, tap a note to add new ones right below it.
 6. **Write a summary from memory** in the Summary tab, then check it against your notes.
 7. **Before the test, do a brain dump.** In Quiz me, write everything you remember for 2 minutes without looking, then mark each section "I had this" or "Missed" and quiz yourself on the ones you missed.
 

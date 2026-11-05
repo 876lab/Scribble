@@ -4,6 +4,15 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="description" content="A note-taking app for video lessons: timestamped notes, pause reminders, easy reordering, summaries and a flashcard quiz.">
+<link rel="icon" href="icons/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="icons/favicon-32.png" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-title" content="Scribble">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#EDF1F7" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0D1424" media="(prefers-color-scheme: dark)">
 <style>:root{color-scheme:light;padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom)}body{margin:0;font-family:system-ui,sans-serif;font-size:14px}img{max-width:100%}[hidden]{display:none!important}</style>
 </head>
 <body>
@@ -75,7 +84,8 @@ button{cursor:pointer}
 .top{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--paper);border-bottom:1px solid var(--rule)}
 .top .wrap{display:flex;align-items:center;gap:var(--s3);padding-block:var(--s3)}
 .brand{font-family:var(--f-display);font-variation-settings:"CASL" 1;font-weight:800;font-size:1.5rem;letter-spacing:-.01em;line-height:1;display:flex;align-items:center;gap:var(--s2)}
-.brand-mark{width:26px;height:26px;border-radius:7px;background:var(--hi);color:var(--hi-ink);display:grid;place-items:center;font-size:.95rem;transform:rotate(-6deg)}
+.brand-mark{width:30px;height:30px;border-radius:8px;background:linear-gradient(#FFE45C,#F5C518);display:grid;place-items:center;flex:none}
+.brand-mark svg{width:15px;height:21px;display:block}
 .back{border:0;background:none;padding:6px 8px 6px 0;color:var(--accent);font-weight:700;display:flex;align-items:center;gap:4px;white-space:nowrap}
 .top-title{min-width:0;flex:1}
 .top-title .eyebrow{font-size:.72rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -411,6 +421,10 @@ const CHIP_ORDER = ["key", "def", "ex", "q", "test", "section"];
 
 /* What's new: newest first. Each run adds one entry at the top (id = date + short slug). */
 const CHANGES = [
+  { id: "2026-11-05-icon", d: "2026-11-05", t: "A new Home Screen icon", b: [
+    "Scribble's icon is now a pause sign whose second bar is a pencil: pause the video, then write.",
+    "To get it, add Scribble to your Home Screen again (Share → Add to Home Screen). Save a backup first, then restore it in the new icon."
+  ] },
   { id: "2026-11-05-backup", d: "2026-11-05", t: "Back up and restore your notes", b: [
     "Home screen → “Back up your notes” → Save backup file. On iPad, choose “Save to Files” (or AirDrop, email, WhatsApp).",
     "Restore from a backup brings the notes back on a new Home Screen icon, another device, or after clearing the browser. Nothing is deleted when you restore.",
@@ -727,7 +741,7 @@ function openNews() {
 function renderTop() {
   const top = $("#top");
   if (S.view === "library") {
-    top.innerHTML = `<div class="wrap"><div class="brand"><span class="brand-mark" aria-hidden="true">✎</span>Scribble</div><div style="flex:1"></div><span id="sync" class="sync">${esc(syncLabel())}</span>${newsBtn()}</div>`;
+    top.innerHTML = `<div class="wrap"><div class="brand"><span class="brand-mark" aria-hidden="true"><svg viewBox="250 150 520 740"><rect x="278" y="168" width="178" height="582" rx="50" fill="#13203B"/><path d="M568 218a50 50 0 0 1 50-50h78a50 50 0 0 1 50 50v44H568z" fill="#E8596B"/><rect x="568" y="262" width="178" height="52" fill="#D3DAE8"/><rect x="568" y="314" width="178" height="400" fill="#13203B"/><rect x="628" y="314" width="58" height="400" fill="#2747C7"/><path d="M568 714h178l-75 122q-14 22-28 0z" fill="#E9CB96"/><path d="M630 794h54l-16 26q-11 20-22 0z" fill="#13203B"/></svg></span>Scribble</div><div style="flex:1"></div><span id="sync" class="sync">${esc(syncLabel())}</span>${newsBtn()}</div>`;
     return;
   }
   const l = cur(); if (!l) return;

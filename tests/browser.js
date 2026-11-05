@@ -26,6 +26,20 @@ const URL_ = process.env.SITE || 'file://' + path.resolve(__dirname, '..', 'inde
     }
   }
 
+  // ---- Home Screen icon and app manifest ----
+  { const base = process.env.SITE ? URL_ : 'file://' + path.resolve(__dirname, '..') + '/';
+    const head = await page.evaluate(() => ({ apple: document.querySelector('link[rel=apple-touch-icon]')?.getAttribute('href'), manifest: document.querySelector('link[rel=manifest]')?.getAttribute('href'), icon: document.querySelector('link[rel=icon][type="image/svg+xml"]')?.getAttribute('href'), title: document.querySelector('meta[name=apple-mobile-web-app-title]')?.content }));
+    ok(head.apple === 'icons/apple-touch-icon.png' && head.manifest === 'manifest.webmanifest' && head.icon === 'icons/favicon.svg' && head.title === 'Scribble', 'page names its Home Screen icon, favicon and manifest');
+    const man = process.env.SITE ? await (await page.request.get(new URL('manifest.webmanifest', base).href)).json() : JSON.parse(fs.readFileSync(path.resolve(__dirname, '..', 'manifest.webmanifest'), 'utf8'));
+    ok(man.name === 'Scribble' && man.display === 'standalone' && man.icons.some(i => i.purpose === 'maskable') && man.icons.some(i => i.sizes === '512x512'), 'manifest has the name, standalone display and icons');
+    for (const f of ['icons/apple-touch-icon.png', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/icon-maskable-512.png', 'icons/favicon-32.png', 'icons/favicon.svg', ...man.icons.map(i => i.src)]) {
+      if (process.env.SITE) { const r = await page.request.get(new URL(f, base).href); ok(r.ok(), 'icon reachable: ' + f); }
+      else ok(fs.existsSync(path.resolve(__dirname, '..', f)), 'icon file exists: ' + f);
+    }
+    const dims = await page.evaluate(async () => { const load = s => new Promise(r => { const i = new Image(); i.onload = () => r(i.naturalWidth + 'x' + i.naturalHeight); i.onerror = () => r('error'); i.src = s; }); return [await load('icons/apple-touch-icon.png'), await load('icons/icon-512.png')]; });
+    ok(dims[0] === '180x180' && dims[1] === '512x512', 'icon sizes are right: ' + dims.join(', '));
+    ok(await page.isVisible('.brand .brand-mark svg'), 'the header shows the same mark'); }
+
   // ---- Home screen ----
   ok(await page.isVisible('text=Watch first.'), 'home screen shows the headline');
   ok(await page.isVisible('#demoVideo'), 'walkthrough video on the home screen');

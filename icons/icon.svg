@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <!-- Scribble: a pause symbol whose second bar is a pencil ("Pause, then write"), leaving a scribble behind. -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFE45C"/><stop offset="1" stop-color="#F5C518"/></linearGradient>
+    <linearGradient id="wood" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#F8E2B8"/><stop offset="1" stop-color="#E8C084"/></linearGradient>
+  </defs>
+  <rect width="1024" height="1024" fill="url(#bg)"/>
+  <g id="art">
+    <path d="M 650 846 C 612 914, 548 800, 503 868 C 466 924, 414 830, 372 878 C 340 914, 306 884, 278 864" fill="none" stroke="#13203B" stroke-width="40" stroke-linecap="round" stroke-linejoin="round"/>
+    <rect x="278" y="168" width="178" height="582" rx="50" fill="#13203B"/>
+    <path d="M 568 218 a 50 50 0 0 1 50 -50 h 78 a 50 50 0 0 1 50 50 v 44 h -178 z" fill="#E8596B"/>
+    <rect x="568" y="262" width="178" height="52" fill="#D3DAE8"/>
+    <rect x="568" y="278" width="178" height="9" fill="#9AA6BF"/>
+    <rect x="568" y="314" width="178" height="400" fill="#13203B"/>
+    <rect x="628" y="314" width="58" height="400" fill="#2747C7"/>
+    <path d="M 568 714 L 746 714 L 671 836 Q 657 858 643 836 Z" fill="url(#wood)"/>
+    <path d="M 630 794 L 684 794 L 668 820 Q 657 840 646 820 Z" fill="#13203B"/>
+  </g>
+</svg>

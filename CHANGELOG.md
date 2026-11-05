@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-11-05 (owner request): New Home Screen icon and web app manifest
+- **Icon:** a pause sign whose second bar is a pencil, leaving a scribble behind ("Pause, then write"), navy on Scribble yellow. Chosen over two other concepts (a notebook page; a video screen with a sticky note) because it reads clearly from 240 px down to 40 px and says what the app is for. Source `icons/icon.svg`; exported `apple-touch-icon.png` (180), `icon-192.png`, `icon-512.png`, `icon-maskable-512.png` (art scaled to the safe zone for Android's round crop), `favicon.svg` and `favicon-32.png` (no scribble, too fine at that size). Preview: `media/icon-preview.png`.
+- **Manifest** (`manifest.webmanifest`): name and short name "Scribble", standalone display, start URL and scope `./`, background and theme colours, the icons above. The page head (in `scripts/build.py`) now links the icons and manifest and sets `apple-mobile-web-app-title`, `apple-mobile-web-app-capable` and light/dark `theme-color`.
+- The app header's brand mark uses the same pause-and-pencil drawing (was a ✎ character).
+- iOS and iPadOS copy the icon when Scribble is added to the Home Screen, so an existing icon keeps the old picture until it is added again; save a backup first and restore it in the new icon (a Home Screen app has its own storage).
+- Tests: 208 browser checks (was 194): icon and manifest links, manifest contents, every icon file present (reachable on the live site in the daily check), icon pixel sizes, header mark.
+
 ## 2026-11-05 (owner request): Back up and restore notes
 - The owner wants to remove an old Home Screen shortcut without losing notes. On iPad and iPhone a Home Screen web app keeps its own storage, and removing the icon deletes it; Safari can also clear website data. So the home screen now has a **Back up your notes** card (above How Scribble works).
 - **Save backup file** writes every lesson to `scribble-backup-YYYY-MM-DD.json` (`makeBackup()`: `{app: "Scribble", kind: "backup", version: 1, exportedAt, lessons, settings}`). On phones and tablets it opens the share sheet (Save to Files, AirDrop, email, WhatsApp); on computers it downloads; in the claude.ai version it uses the downloads capability. "Other ways" → **Copy backup as text** for pasting into a note or email.

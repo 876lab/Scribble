@@ -1,5 +1,7 @@
 # Scribble
 
+<img src="icons/icon-512.png" alt="Scribble icon: a pause sign whose second bar is a pencil" width="96">
+
 A note-taking app for online video lessons, built for people who find it hard to listen and write at the same time.
 
 Instead of typing while the video talks, Scribble helps you **watch a chunk, pause, then write one line**. Every note is stamped with the video time, so you can always find your way back. Afterward, your notes turn into a summary and a flashcard quiz to use before the test.

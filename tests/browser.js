@@ -417,6 +417,55 @@ const URL_ = process.env.SITE || 'file://' + path.resolve(__dirname, '..', 'inde
   await page.screenshot({ path: OUT + '/home-returning-dark.png', fullPage: true });
   ok(!(await overflow()), 'home dark: no sideways scrolling');
 
+  // ---- Backup and restore ----
+  await page.emulateMedia({ colorScheme: 'light' });
+  await page.reload(); await page.waitForSelector('.home');
+  ok(await page.isVisible('#backupCard') && /No backup yet/.test(await page.innerText('#bkLast')), 'home shows the backup card, with no backup yet');
+  const savedBefore = await lessons();
+  const [bdl] = await Promise.all([page.waitForEvent('download'), page.click('[data-act=backupSave]')]);
+  const bfile = path.join(OUT, 'backup.json'); await bdl.saveAs(bfile);
+  ok(/^scribble-backup-\d{4}-\d\d-\d\d\.json$/.test(bdl.suggestedFilename()), 'backup file is named with the date: ' + bdl.suggestedFilename());
+  { const bk = JSON.parse(fs.readFileSync(bfile, 'utf8'));
+    ok(bk.app === 'Scribble' && bk.version === 1 && bk.lessons.length === savedBefore.length, 'backup holds every lesson');
+    const byId = a => JSON.stringify([...a].sort((x, y) => x.id < y.id ? -1 : 1).map(l => [l.id, l.title, l.notes]));
+    ok(byId(bk.lessons) === byId(savedBefore), 'backup has every note exactly'); }
+  ok(/Last backup: today/.test(await page.innerText('#bkLast')), 'card shows the backup was saved today');
+  // Lose everything, as if the Home Screen icon was removed
+  await page.evaluate(() => { localStorage.removeItem('scribble.v1.lessons'); localStorage.removeItem('scribble.lastBackup'); });
+  await page.reload(); await page.waitForSelector('.home');
+  ok(await page.locator('.lesson').count() === 0 && await page.isVisible('#backupCard >> text=Have a backup?'), 'a fresh start offers to restore');
+  await page.click('[data-act=restoreOpen]');
+  ok(await page.isVisible('#restorePanel'), 'restore panel opens');
+  await page.setInputFiles('#restoreFile', bfile);
+  await page.waitForSelector('#restorePreview .bk-preview');
+  ok(new RegExp(savedBefore.length + ' lessons').test(await page.innerText('#restorePreview')) && /adds 4 lessons you don't have/.test(await page.innerText('#restoreWhat')), 'preview says what the backup holds and what it will add: ' + await page.innerText('#restoreWhat'));
+  ok(!(await overflow()), 'restore panel: no sideways scrolling');
+  await page.screenshot({ path: OUT + '/restore.png' });
+  await page.click('[data-act=restoreGo]');
+  { const now = await lessons(); const byId = a => JSON.stringify([...a].sort((x, y) => x.id < y.id ? -1 : 1));
+    const pick = a => JSON.stringify([...a].sort((x, y) => x.id < y.id ? -1 : 1).map(l => [l.id, l.title, l.course, l.createdAt, l.updatedAt, l.notes, l.dump || '', l.mySummary || '']));
+    ok(pick(now) === pick(savedBefore), 'restore brings back every lesson and note exactly'); }
+  ok(await page.locator('.lesson').count() === savedBefore.length, 'lessons are back on the home screen');
+  ok(await page.isVisible('[data-act=restoreUndo]'), 'restore can be undone');
+  await page.click('[data-act=restoreUndo]');
+  ok((await lessons()).length === 0, 'undo restore goes back to how it was');
+  await page.click('[data-act=restoreOpen]'); await page.setInputFiles('#restoreFile', bfile); await page.waitForSelector('#restorePreview .bk-preview'); await page.click('[data-act=restoreGo]');
+  // Merge: a newer copy here is kept; a lesson missing here is added; nothing is deleted
+  await page.evaluate(() => { const ls = JSON.parse(localStorage.getItem('scribble.v1.lessons')); const ex = ls.find(x => x.example); ex.title = 'Edited after backup'; ex.updatedAt = Date.now() + 1000; const keep = ls.filter(x => x.id !== 'old1'); keep.push({ id: 'brandnew', title: 'Made after backup', course: '', createdAt: Date.now(), updatedAt: Date.now(), notes: [] }); localStorage.setItem('scribble.v1.lessons', JSON.stringify(keep)); });
+  await page.reload(); await page.waitForSelector('.home');
+  await page.click('[data-act=restoreOpen]'); await page.setInputFiles('#restoreFile', bfile); await page.waitForSelector('#restorePreview .bk-preview');
+  ok(/adds 1 lesson you don't have/.test(await page.innerText('#restoreWhat')), 'merge only adds what is missing: ' + await page.innerText('#restoreWhat'));
+  await page.click('[data-act=restoreGo]');
+  { const now = await lessons(); ok(now.length === savedBefore.length + 1 && now.find(x => x.example).title === 'Edited after backup' && now.some(x => x.id === 'old1') && now.some(x => x.id === 'brandnew'), 'newer notes here are kept, missing lessons come back, nothing is deleted'); }
+  // Bad file and pasted backup
+  fs.writeFileSync(path.join(OUT, 'not-a-backup.json'), 'hello');
+  await page.click('[data-act=restoreOpen]'); await page.setInputFiles('#restoreFile', path.join(OUT, 'not-a-backup.json'));
+  await page.waitForSelector('#restorePreview .ai-err');
+  ok(/isn't a Scribble backup/.test(await page.innerText('#restorePreview')), 'a wrong file gets a plain message');
+  await page.click('#restorePanel summary'); await page.fill('#restoreCode', fs.readFileSync(bfile, 'utf8')); await page.click('[data-act=restoreCheck]');
+  ok(/already here and up to date|updates/.test(await page.innerText('#restorePreview')), 'a pasted backup is read too');
+  await page.keyboard.press('Escape');
+
   ok(errors.length === 0, 'no page errors: ' + errors.join(' | '));
   await browser.close();
   console.log(`browser: ${pass} passed, ${fail} failed`);

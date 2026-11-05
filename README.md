@@ -36,6 +36,7 @@ Press **Enter** to add a note and **Shift+Enter** for a new line.
 - **Summary:** automatic key points grouped by section, a space for your own summary, a list of moments to rewatch, and an optional summary from Claude with key terms, gaps and practice questions
 - **Quiz me:** a 2-minute brain dump checked section by section, and flashcards from your sections, questions, definitions and Claude's practice questions, with a second round for the ones you missed
 - **Home screen:** pick up where you left off with the next study step; lessons grouped by date or by course, each showing its progress (Notes, Summary, Brain dump, Quiz)
+- **Back up and restore:** save all your lessons to one backup file (Save to Files on iPad) and restore them on a new Home Screen icon, another device, or after clearing the browser; restoring never deletes anything
 - **Search:** find any word across all your lessons from the home screen (tap a match to jump to that note), or within one lesson in Organize
 - **What's new:** the sparkle button at the top lists each update
 - **Export:** save your notes as a PDF or Word (.docx) file, with video times, sections as headings, highlighted test notes and a Key terms table; or copy them as plain text
@@ -43,7 +44,7 @@ Press **Enter** to add a note and **Shift+Enter** for a new line.
 ## Where it runs
 
 - **In Claude:** the full version runs as a Claude artifact. Lessons save to your Claude account and sync across devices, and the Claude summary is available.
-- **From this repository:** open `index.html` in any browser, or turn on GitHub Pages for this repo. In this version, lessons save in that browser only, and the Claude summary button is hidden.
+- **From this repository:** open `index.html` in any browser, or turn on GitHub Pages for this repo. In this version, lessons save in that browser only (a Home Screen app on iPhone or iPad has its own storage, deleted with its icon), so use **Back up your notes** on the home screen. The Claude summary button is hidden here.
 
 ## Why it works this way
 

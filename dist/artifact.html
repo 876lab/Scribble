@@ -250,6 +250,16 @@ details.how>summary small{display:block;font-weight:400;color:var(--muted);font-
 .note.anchor{background:var(--accent-soft);box-shadow:inset 0 -3px 0 var(--accent)}
 .ins-banner{display:flex;align-items:center;justify-content:space-between;gap:var(--s2);flex-wrap:wrap;background:var(--accent-soft);border-radius:12px;padding:6px 6px 6px 12px;margin-bottom:var(--s2);font-size:.88rem}
 .ins-txt{min-width:0;overflow-wrap:anywhere}
+.backup{display:flex;flex-direction:column;gap:var(--s3)}
+.backup .h{margin-bottom:4px}
+.backup p.muted{margin:0;font-size:.9rem;max-width:62ch}
+.bk-last{margin:0;font-size:.86rem;font-weight:700;color:var(--ok)}
+.bk-last.stale{color:var(--t-q)}
+.filebtn{position:relative;align-self:flex-start;cursor:pointer;overflow:hidden}
+.filebtn input{position:absolute;inset:0;opacity:0;cursor:pointer;font-size:0}
+.filebtn:focus-within{outline:2px solid var(--accent);outline-offset:2px}
+.bk-preview{display:flex;flex-direction:column;gap:var(--s2);background:var(--paper);border-radius:12px;padding:var(--s3)}
+.bk-preview ul{margin:0;padding-left:1.2em;font-size:.9rem;display:flex;flex-direction:column;gap:2px}
 .toast{display:flex;align-items:center;justify-content:center;gap:4px 14px;flex-wrap:wrap}
 .toast-undo{border:0;background:none;color:inherit;font-weight:800;text-decoration:underline;text-underline-offset:3px;padding:4px 2px;font-size:inherit}
 body:has(.actionbar) .toast{bottom:calc(var(--toast-lift,170px) + env(safe-area-inset-bottom,0px))}
@@ -392,6 +402,11 @@ const CHIP_ORDER = ["key", "def", "ex", "q", "test", "section"];
 
 /* What's new: newest first. Each run adds one entry at the top (id = date + short slug). */
 const CHANGES = [
+  { id: "2026-11-05-backup", d: "2026-11-05", t: "Back up and restore your notes", b: [
+    "Home screen → “Back up your notes” → Save backup file. On iPad, choose “Save to Files” (or AirDrop, email, WhatsApp).",
+    "Restore from a backup brings the notes back on a new Home Screen icon, another device, or after clearing the browser. Nothing is deleted when you restore.",
+    "The card shows when you last saved a backup, and whether notes changed since."
+  ] },
   { id: "2026-11-02-select", d: "2026-11-02", t: "Move or delete several notes, and add notes in between", b: [
     "Organize: tap “Select several”, tick the notes, then move them up or down, indent, retype or delete them together.",
     "Undo any delete: tap Undo on the message, or “Undo delete” in Organize. It works for several deletes in a row.",
@@ -441,7 +456,7 @@ const S = {
   lessons: new Map(), view: "library", currentId: null, tab: "capture",
   draft: "", draftTag: "", draftT: null,
   selected: null, editingId: null, filter: "all", showAll: false,
-  multi: false, msel: new Set(), undoStack: [], insertAfter: null,
+  multi: false, msel: new Set(), undoStack: [], insertAfter: null, preRestore: null, pendingRestore: null,
   newOpen: false, confirmDelete: false,
   clock: { running: false, base: 0, startedAt: 0, lessonId: null },
   nudgeMin: +(lsGet("scribble.nudge") ?? 5) || 0, lastNudgeAt: -1, nudgeOn: false,
@@ -865,6 +880,7 @@ function libraryHTML() {
       <p>A notebook built for video lessons: one tap stamps the time, a gentle reminder tells you when to pause, and everything turns into a summary and a quiz before your test.</p></section>
     ${S.newOpen ? form : `<div class="row-wrap"><button class="btn primary" data-act="newOpen">+ New lesson</button><button class="btn" data-act="example">Open an example lesson</button></div>`}
     <section class="card empty"><h3 class="h">No lessons yet</h3><p class="muted">Each video you watch becomes a lesson. Start one when you press play, or open the example to see how a finished set of notes looks.</p></section>
+    ${backupCardHTML(ls)}
     ${howHTML(ls, true)}
   </div>`;
   const total = ls.reduce((a, l) => a + l.notes.filter(n => n.tag !== "section").length, 0);
@@ -873,6 +889,7 @@ function libraryHTML() {
     ${S.newOpen ? form : ""}
     <div class="searchbox" role="search">${SEARCH_ICON}<input type="search" id="libSearch" placeholder="Search all notes" aria-label="Search all notes" value="${esc(S.search)}" autocomplete="off" enterkeyhint="search"><button class="clear" data-act="clearSearch" data-for="libSearch" aria-label="Clear search" ${S.search ? "" : "hidden"}>✕</button></div>
     <div id="libBody" aria-live="polite">${libListHTML(ls)}</div>
+    ${backupCardHTML(ls)}
     <details class="card how" id="howCard"><summary><span>How Scribble works<small>A 90-second video and the routine for each lesson</small></span></summary><div class="how-body">${howHTML(ls, false)}</div></details>
   </div>`;
 }
@@ -1474,6 +1491,103 @@ async function saveBlob(name, blob) {
   toast("Downloaded " + name); return true;
 }
 
+/* ---------- backup and restore ---------- */
+/* A backup is one JSON file with every lesson. Restoring merges: lessons you don't have are added,
+   lessons that are newer in the backup replace older copies here, and nothing is ever deleted. */
+const BK_KEY = "scribble.lastBackup";
+function lastBackup() { try { const v = JSON.parse(lsGet(BK_KEY) || "null"); return v && v.at ? v : null; } catch { return null; } }
+function makeBackup() {
+  const lessons = [...S.lessons.values()].map(l => clone(l));
+  return { app: "Scribble", kind: "backup", version: 1, exportedAt: new Date().toISOString(), lessons, settings: { nudge: S.nudgeMin, homeView: S.homeView } };
+}
+function backupName(d = new Date()) { const z = n => String(n).padStart(2, "0"); return `scribble-backup-${d.getFullYear()}-${z(d.getMonth() + 1)}-${z(d.getDate())}.json`; }
+function readBackup(text) {
+  let data; try { data = JSON.parse(String(text).trim().replace(/^﻿/, "")); } catch { throw new Error("That isn't a Scribble backup. Choose the .json file you saved with “Save backup file”."); }
+  if (Array.isArray(data)) data = { app: "Scribble", lessons: data };
+  if (!data || data.app !== "Scribble" || !Array.isArray(data.lessons)) throw new Error("That file isn't a Scribble backup. Choose the .json file you saved with “Save backup file”.");
+  const lessons = data.lessons.filter(l => l && typeof l === "object" && typeof l.id === "string" && l.id && Array.isArray(l.notes)).map(normalize);
+  if (!lessons.length) throw new Error("This backup has no lessons in it.");
+  return { lessons, exportedAt: Date.parse(data.exportedAt) || 0, settings: data.settings || {} };
+}
+function planRestore(lessons) {
+  const add = [], update = [], keep = [];
+  lessons.forEach(b => { const here = S.lessons.get(b.id); if (!here) add.push(b); else if ((b.updatedAt || 0) > (here.updatedAt || 0)) update.push(b); else keep.push(b); });
+  return { add, update, keep };
+}
+function applyRestore(plan) {
+  S.preRestore = [...S.lessons.values()].map(l => clone(l));
+  lsSet("scribble.v1.beforeRestore", JSON.stringify(S.preRestore));
+  [...plan.add, ...plan.update].forEach(b => { const l = normalize(b); S.lessons.set(l.id, l); persist(l, false); });
+  saveLocal();
+  return plan.add.length + plan.update.length;
+}
+function undoRestore() {
+  const before = S.preRestore; if (!before) return false;
+  const keepIds = new Set(before.map(l => l.id));
+  [...S.lessons.keys()].forEach(id => { if (!keepIds.has(id)) deleteLesson(id); });
+  before.forEach(b => { const l = normalize(b); S.lessons.set(l.id, l); persist(l, false); });
+  S.preRestore = null; saveLocal(); return true;
+}
+async function saveBackup() {
+  const data = makeBackup(), name = backupName(), text = JSON.stringify(data, null, 1), blob = new Blob([text], { type: "application/json" });
+  let ok = false;
+  // Phones and tablets: the share sheet offers "Save to Files", AirDrop, email or WhatsApp.
+  const touch = window.matchMedia?.("(pointer: coarse)").matches;
+  if (!S.downloads && !inFrame() && touch && navigator.canShare) {
+    try {
+      const file = new File([blob], name, { type: "application/json" });
+      if (navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: "Scribble backup" }); ok = true; toast("Backup ready: " + name); }
+    } catch (e) { if (e && e.name === "AbortError") return false; }
+  }
+  if (!ok) ok = await saveBlob(name, blob);
+  if (ok) {
+    lsSet(BK_KEY, JSON.stringify({ at: Date.now(), lessons: data.lessons.length, notes: data.lessons.reduce((a, l) => a + l.notes.length, 0) }));
+    const c = $("#backupCard"); if (c) c.outerHTML = backupCardHTML([...S.lessons.values()]);
+  }
+  return ok;
+}
+function backupAge() {
+  const b = lastBackup(); if (!b) return { text: "No backup yet", stale: true };
+  const days = Math.floor((dayStart(Date.now()) - dayStart(b.at)) / DAY_MS);
+  const changed = [...S.lessons.values()].some(l => l.updatedAt > b.at);
+  return { text: `Last backup: ${days === 0 ? "today" : days === 1 ? "yesterday" : days + " days ago"} (${b.lessons} lesson${b.lessons === 1 ? "" : "s"})${changed ? ", notes changed since" : ""}`, stale: days >= 7 && changed || (changed && days >= 1) };
+}
+function backupCardHTML(ls) {
+  const account = S.mode === "remote";
+  if (!ls.length) return `<section class="card backup" id="backupCard"><div><h3 class="h">Have a backup?</h3><p class="muted">If you saved your notes with “Save backup file”, bring them back here.</p></div><div class="row-wrap"><button class="btn" data-act="restoreOpen">Restore from a backup</button></div></section>`;
+  const age = backupAge();
+  return `<section class="card backup" id="backupCard">
+    <div><h3 class="h">Back up your notes</h3><p class="muted">${account ? "Your notes are saved to your Claude account. A backup file is still useful, for example to move your notes to the website version." : "Your notes are saved only inside this app on this device. Removing its Home Screen icon or clearing website data deletes them, so save a backup file now and then."}</p></div>
+    <p class="bk-last ${age.stale ? "stale" : ""}" id="bkLast">${esc(age.text)}</p>
+    <div class="row-wrap"><button class="btn primary" data-act="backupSave">Save backup file</button><button class="btn" data-act="restoreOpen">Restore from a backup</button>${S.preRestore ? `<button class="btn ghost" data-act="restoreUndo">Undo restore</button>` : ""}</div>
+    <details class="more"><summary>Other ways</summary><p class="muted" style="margin:0;font-size:.86rem">Copy the backup as text and paste it somewhere safe, like a note or an email to yourself. Paste it back under “Restore from a backup”.</p><div class="row-wrap"><button class="btn small" data-act="backupCopy">Copy backup as text</button></div></details>
+  </section>`;
+}
+function openRestore() {
+  $("#layer").innerHTML = `<div class="overlay" data-act="closeLayer"><div class="card export" role="dialog" aria-modal="true" aria-labelledby="restoreTitle" id="restorePanel">
+    <div class="dump-head"><h3 class="h" id="restoreTitle">Restore from a backup</h3><button class="btn small ghost" data-act="closeLayer">Close</button></div>
+    <p style="margin:0;font-size:.95rem">Choose the backup file you saved (it's called <b>scribble-backup-</b> and the date). Nothing here is deleted: lessons you don't have are added, and older copies are updated.</p>
+    <label class="btn primary filebtn">Choose backup file<input type="file" id="restoreFile" accept=".json,application/json,text/plain"></label>
+    <details class="more"><summary>Paste a backup instead</summary>
+      <textarea class="field" id="restoreCode" placeholder="Paste the backup text here" aria-label="Backup text"></textarea>
+      <div class="row-wrap"><button class="btn small" data-act="restoreCheck">Check backup</button></div>
+    </details>
+    <div id="restorePreview" aria-live="polite"></div>
+  </div></div>`;
+}
+function previewRestore(text) {
+  const box = $("#restorePreview"); if (!box) return;
+  try {
+    const bk = readBackup(text), plan = planRestore(bk.lessons), notes = bk.lessons.reduce((a, l) => a + l.notes.length, 0);
+    S.pendingRestore = plan;
+    const what = [plan.add.length ? `adds ${plan.add.length} lesson${plan.add.length === 1 ? "" : "s"} you don't have` : "", plan.update.length ? `updates ${plan.update.length} that ${plan.update.length === 1 ? "is" : "are"} older here` : ""].filter(Boolean).join(" and ");
+    box.innerHTML = `<div class="bk-preview"><p style="margin:0"><b>Backup${bk.exportedAt ? " from " + esc(new Date(bk.exportedAt).toLocaleDateString(undefined, { month: "long", day: "numeric", year: "numeric" })) : ""}</b> · ${bk.lessons.length} lesson${bk.lessons.length === 1 ? "" : "s"} · ${notes} notes</p>
+      <ul>${bk.lessons.slice(0, 8).map(l => `<li>${esc(l.title)} <span class="muted">· ${l.notes.length} notes${plan.add.includes(l) ? " · new here" : plan.update.includes(l) ? " · newer in backup" : " · already up to date"}</span></li>`).join("")}${bk.lessons.length > 8 ? `<li class="muted">and ${bk.lessons.length - 8} more</li>` : ""}</ul>
+      <p style="margin:0" id="restoreWhat">${what ? "This " + esc(what) + ". Nothing is deleted." : "Everything in this backup is already here and up to date."}</p>
+      ${what ? `<div class="row-wrap"><button class="btn primary" data-act="restoreGo">Restore</button></div>` : ""}</div>`;
+  } catch (e) { S.pendingRestore = null; box.innerHTML = `<p class="ai-err" role="alert">${esc(e.message)}</p>`; }
+}
+
 /* ---------- export: text ---------- */
 function toMarkdown(l) {
   const out = [`# ${l.title}`, `${l.course ? l.course + " · " : ""}${new Date(l.createdAt).toLocaleDateString()}`, ""];
@@ -1608,6 +1722,22 @@ document.addEventListener("click", async e => {
     }
     case "quizRestart": S.quiz = null; render(); break;
     case "news": openNews(); break;
+    case "backupSave": if (!el.disabled) { el.disabled = true; try { await saveBackup(); } finally { el.disabled = false; } } break;
+    case "backupCopy": {
+      const text = JSON.stringify(makeBackup());
+      try { await navigator.clipboard.writeText(text); lsSet(BK_KEY, JSON.stringify({ at: Date.now(), lessons: S.lessons.size, notes: [...S.lessons.values()].reduce((a, x) => a + x.notes.length, 0) })); toast("Backup copied. Paste it somewhere safe."); const c = $("#backupCard"); if (c) c.outerHTML = backupCardHTML([...S.lessons.values()]); }
+      catch { toast("Couldn't copy here. Use Save backup file instead."); }
+      break;
+    }
+    case "restoreOpen": openRestore(); break;
+    case "restoreCheck": previewRestore($("#restoreCode")?.value || ""); break;
+    case "restoreGo": {
+      const plan = S.pendingRestore; if (!plan) break;
+      const k = applyRestore(plan); S.pendingRestore = null; $("#layer").innerHTML = ""; S.search = "";
+      if (S.view !== "library") goLibrary(); else render();
+      toast(`Restored ${k} lesson${k === 1 ? "" : "s"}`); break;
+    }
+    case "restoreUndo": if (undoRestore()) { render(); toast("Restore undone"); } break;
     case "jump": openLesson(el.dataset.id, el.dataset.tab || "organize", el.dataset.note ? { jump: el.dataset.note } : {}); break;
     case "openSearch": openLesson(el.dataset.id, "organize", { query: S.search }); break;
     case "clearSearch": {
@@ -1702,6 +1832,12 @@ document.addEventListener("input", e => {
   if (l && e.target.id === "mySummary") { l.mySummary = e.target.value; clearTimeout(metaTimer); metaTimer = setTimeout(() => { persist(l); updateTopText(); }, 600); }
 });
 document.addEventListener("change", e => {
+  if (e.target.id === "restoreFile" && e.target.files && e.target.files[0]) {
+    const f = e.target.files[0];
+    if (f.size > 50 * 1024 * 1024) { const b = $("#restorePreview"); if (b) b.innerHTML = `<p class="ai-err" role="alert">That file is too big to be a Scribble backup.</p>`; return; }
+    const r = new FileReader(); r.onload = () => previewRestore(String(r.result || "")); r.onerror = () => { const b = $("#restorePreview"); if (b) b.innerHTML = `<p class="ai-err" role="alert">Couldn't read that file. Try choosing it again.</p>`; }; r.readAsText(f);
+    return;
+  }
   if (e.target.id === "nudgeSel") { S.nudgeMin = +e.target.value; lsSet("scribble.nudge", String(S.nudgeMin)); S.lastNudgeAt = S.nudgeMin ? Math.floor(elapsed() / (S.nudgeMin * 60)) : -1; render(); }
 });
 document.addEventListener("focusout", e => {
@@ -1714,7 +1850,7 @@ document.addEventListener("focusout", e => {
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && S.clock.running) { try { navigator.wakeLock?.request("screen").then(w => S.wake = w).catch(() => {}); } catch {} } });
 
 /* Read-only hook for the automated checks in tests/. */
-window.SCRIBBLE = Object.freeze({ CHANGES, moveMany, canMoveMany, dateGroup, nextStep, lessonSteps, searchTerms, matchesAll, hl, searchLessons, sectionGroups, buildDeck, normalize, toMarkdown, glossary, exportModel, makePDF, makeDOCX, toWin, crc32 });
+window.SCRIBBLE = Object.freeze({ CHANGES, makeBackup, readBackup, planRestore, moveMany, canMoveMany, dateGroup, nextStep, lessonSteps, searchTerms, matchesAll, hl, searchLessons, sectionGroups, buildDeck, normalize, toMarkdown, glossary, exportModel, makePDF, makeDOCX, toWin, crc32 });
 
 /* ---------- boot ---------- */
 loadLocal();

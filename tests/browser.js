@@ -480,6 +480,63 @@ const URL_ = process.env.SITE || 'file://' + path.resolve(__dirname, '..', 'inde
   ok(/already here and up to date|updates/.test(await page.innerText('#restorePreview')), 'a pasted backup is read too');
   await page.keyboard.press('Escape');
 
+  // ---- Tables typed into notes ----
+  { const t = await page.evaluate(() => {
+      const { tableCells, noteTable, tableRun, normalize, exportModel, toMarkdown } = window.SCRIBBLE;
+      const N = (id, tag, text, t, level = 1) => ({ id, tag, text, t, level });
+      const l = normalize({ id: 'tb', title: 'Tables', notes: [N('s', 'section', 'Stages', 0, 0), N('h', '', 'Stage | Where | ATP', 10), N('d', '', '---|---|---', 11), N('r1', '', 'Glycolysis | Cytoplasm | 2', 12), N('r2', 'test', '| Electron transport chain | Inner membrane | about 34 |', 13), N('p', '', 'A plain note | not a table?', 14, 2), N('m', '', 'Food | Calories\nRice | 200\nBeans | 120', 15)] });
+      const em = exportModel(l).filter(b => b.k === 'grid');
+      return {
+        cells: [tableCells('a | b | c'), tableCells('| a | b |'), tableCells('a |'), tableCells('either || or'), tableCells('no pipes'), tableCells('--- | :---:'), tableCells('x | | z')].map(r => r && (r.sep ? 'sep' : r.cells.join('/'))),
+        multi: noteTable('Food | Calories\nRice | 200')?.length, mixed: noteTable('Heading\nRice | 200'),
+        run: (r => [r.head.join('/'), r.rows.map(x => x.join('/')).join(';'), r.cols, r.notes.length])(tableRun(l.notes, 1)),
+        none: tableRun(l.notes, 0),
+        grids: em.map(b => [b.head.length, b.rows.length, b.ts, b.level]),
+        md: toMarkdown(l)
+      }; });
+    ok(JSON.stringify(t.cells) === JSON.stringify(['a/b/c', 'a/b', null, 'either//or', null, 'sep', 'x//z']), 'table rows are read from lines with | : ' + JSON.stringify(t.cells));
+    ok(t.multi === 2 && t.mixed === null, 'a note with several | lines is a table; mixed text is not');
+    ok(JSON.stringify(t.run) === JSON.stringify(['Stage/Where/ATP', 'Glycolysis/Cytoplasm/2;★ Electron transport chain/Inner membrane/about 34', 3, 4]), 'consecutive row notes join into one table (divider dropped, ★ kept): ' + JSON.stringify(t.run));
+    ok(t.none === null, 'section headings never become tables');
+    ok(JSON.stringify(t.grids) === JSON.stringify([[3, 2, '00:10', 0], [2, 0, '00:14', 1], [2, 2, '00:15', 0]]), 'export has a table for each run (a different indent starts a new one): ' + JSON.stringify(t.grids));
+    ok(/\| Stage \| Where \| ATP \|\n\| --- \| --- \| --- \|\n\| Glycolysis \| Cytoplasm \| 2 \|/.test(t.md), 'Markdown export writes a real table'); }
+  await page.evaluate(() => { const ls = JSON.parse(localStorage.getItem('scribble.v1.lessons')); ls.push({ id: 'tbl', title: 'Table lesson', course: 'BIO 101', createdAt: Date.now(), updatedAt: Date.now() + 5000, notes: [{ id: 's', tag: 'section', text: 'Stages', t: 0, level: 0 }, { id: 'h', tag: '', text: 'Stage | Where | ATP', t: 10, level: 1 }, { id: 'r1', tag: '', text: 'Glycolysis | Cytoplasm | 2', t: 12, level: 1 }, { id: 'r2', tag: 'test', text: 'Electron transport chain | Inner membrane | about 34', t: 13, level: 1 }, { id: 'm', tag: '', text: 'Food | Calories\nRice | 200', t: 15, level: 1 }] }); localStorage.setItem('scribble.v1.lessons', JSON.stringify(ls)); });
+  await page.reload(); await page.waitForSelector('.home');
+  await page.locator('.lesson', { hasText: 'Table lesson' }).first().click(); await page.waitForSelector('.tabs');
+  await page.click('[data-tab=organize]');
+  ok(await page.locator('#orgList .note.trow-note .trow .tc').count() === 9, 'Organize shows each row note as cells');
+  { const pos = await page.evaluate(() => [...document.querySelectorAll('#orgList .trow-note')].map(li => [...li.querySelectorAll('.tc')].map(c => Math.round(c.getBoundingClientRect().left))));
+    ok(pos.length === 3 && pos.every(p => JSON.stringify(p) === JSON.stringify(pos[0])), 'columns line up from row to row: ' + JSON.stringify(pos)); }
+  ok(await page.locator('#orgList .trow-note').first().evaluate(li => +getComputedStyle(li.querySelector('.trow')).fontWeight >= 600) && await page.locator('#orgList .trow-note').nth(1).evaluate(li => +getComputedStyle(li.querySelector('.trow')).fontWeight < 600), 'the first row is the header');
+  ok(await page.locator('#orgList .note .ntable th').count() === 2 && await page.locator('#orgList .note .ntable td').count() === 2, 'a note with several lines shows as a small table');
+  ok(!(await overflow()), 'tables: no sideways scrolling');
+  await page.screenshot({ path: OUT + '/tables.png', fullPage: true });
+  await page.click('#orgList .note[data-id=r1]');
+  ok(await page.isVisible('.actionbar') || await page.locator('#orgList .note.sel[data-id=r1]').count() === 1, 'a table row can still be selected and moved like any note');
+  await page.click('[data-tab=capture]');
+  ok(/table row/.test(await page.innerText('.comp-foot')), 'Take notes mentions table rows');
+  await page.fill('#draft', 'Krebs cycle | Matrix | 2'); await page.press('#draft', 'Enter');
+  ok(await page.locator('#recent .trow-note', { hasText: 'Matrix' }).count() === 1, 'a typed row shows as cells right away');
+  ok(!(await overflow()), 'take notes with tables: no sideways scrolling');
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await page.click('[data-tab=organize]');
+  await page.screenshot({ path: OUT + '/tables-dark.png', fullPage: true });
+  ok(!(await overflow()), 'tables dark: no sideways scrolling');
+  await page.emulateMedia({ colorScheme: 'light' });
+  { const bufs = await page.evaluate(() => { const l = JSON.parse(localStorage.getItem('scribble.v1.lessons')).find(x => x.id === 'tbl'); const L = window.SCRIBBLE.normalize(l); return [Array.from(window.SCRIBBLE.makePDF(L)), Array.from(window.SCRIBBLE.makeDOCX(L))]; });
+    const s = Buffer.from(bufs[0]).toString('latin1');
+    const xref = +s.match(/startxref\n(\d+)/)[1], rows = s.slice(xref).split('\n').slice(3).filter(r => / 00000 n $/.test(r)).map(r => +r.slice(0, 10));
+    ok(rows.every((o, i) => s.startsWith(`${i + 1} 0 obj`, o)) && /\(Stage\) Tj/.test(s) && /\(Inner membrane\) Tj/.test(s) && /\(Krebs cycle\) Tj/.test(s), 'PDF draws the table cells');
+    ok(!/Stage \| Where/.test(s), 'PDF shows cells, not the | text');
+    fs.writeFileSync(path.join(OUT, 'tables.pdf'), Buffer.from(bufs[0]));
+    const b = Buffer.from(bufs[1]), files = {};
+    const eocd = b.lastIndexOf(Buffer.from([0x50, 0x4b, 0x05, 0x06])); let p = b.readUInt32LE(eocd + 16);
+    for (let i = 0; i < b.readUInt16LE(eocd + 10); i++) { const size = b.readUInt32LE(p + 20), nl = b.readUInt16LE(p + 28), off = b.readUInt32LE(p + 42), name = b.toString('utf8', p + 46, p + 46 + nl); const ln = b.readUInt16LE(off + 26); files[name] = b.subarray(off + 30 + ln, off + 30 + ln + size).toString('utf8'); p += 46 + nl; }
+    fs.writeFileSync(path.join(OUT, 'tables.docx'), b);
+    const d = files['word/document.xml'];
+    const bad = await page.evaluate(x => new DOMParser().parseFromString(x, 'application/xml').getElementsByTagName('parsererror').length, d);
+    ok(bad === 0 && (d.match(/<w:tbl>/g) || []).length === 3 && /<w:gridCol w:w="\d+"\/><w:gridCol w:w="\d+"\/><w:gridCol w:w="\d+"\/><\/w:tblGrid>/.test(d) && />Inner membrane</.test(d), 'Word file has real tables with the right columns'); }
+
   ok(errors.length === 0, 'no page errors: ' + errors.join(' | '));
   await browser.close();
   console.log(`browser: ${pass} passed, ${fail} failed`);

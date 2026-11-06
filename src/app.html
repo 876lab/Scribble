@@ -200,6 +200,20 @@ details.how>summary small{display:block;font-weight:400;color:var(--muted);font-
 .note.section .body{font-family:var(--f-display);font-variation-settings:"CASL" .7;font-weight:800;font-size:1.05rem;padding-top:14px;padding-bottom:6px}
 .note.section{border-bottom:2px solid var(--ink)}
 .txt{white-space:pre-wrap}
+/* tables typed into notes: each row note shows its cells in equal columns, so rows in a run line up */
+.txt.trow{display:grid;white-space:normal;border:1px solid var(--rule);border-radius:4px;background:var(--sheet)}
+.trow .tc{min-width:0;padding:3px 6px;overflow-wrap:break-word;hyphens:auto;-webkit-hyphens:auto;white-space:pre-wrap;font-size:.92em}
+.trow .tc+.tc{border-left:1px solid var(--rule)}
+.txt.trow.thead{font-weight:700;background:var(--accent-soft)}
+.note.test .txt.trow{padding:0;background:color-mix(in srgb,var(--hi) 32%,var(--sheet))}
+.trow-note{border-bottom-color:transparent}
+.trow-note .body{padding-top:2px;padding-bottom:2px}
+.trow-note .ts{padding-top:4px}
+.txt.tsep{min-height:6px;background:repeating-linear-gradient(90deg,var(--rule) 0 6px,transparent 6px 10px);border:0;margin:6px 0}
+.tscroll{display:block;overflow-x:auto;max-width:100%}
+.ntable{border-collapse:collapse;white-space:normal;font-size:.95em;margin:2px 0}
+.ntable th,.ntable td{border:1px solid var(--rule);padding:3px 6px;text-align:left;vertical-align:top;overflow-wrap:break-word;hyphens:auto;-webkit-hyphens:auto}
+.ntable th{background:var(--accent-soft);font-weight:700}
 .note.test .txt{background:linear-gradient(transparent 40%,color-mix(in srgb,var(--hi) 75%,transparent) 40%);box-decoration-break:clone;-webkit-box-decoration-break:clone;padding:0 2px}
 .tag{display:inline-block;font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;border-radius:5px;padding:1px 6px;margin-right:6px;vertical-align:2px;border:1px solid currentColor}
 .tag.key{color:var(--t-key)}.tag.def{color:var(--t-def)}.tag.ex{color:var(--t-ex)}.tag.q{color:var(--t-q)}.tag.rewatch{color:var(--t-rewatch)}.tag.test{color:var(--t-test)}
@@ -403,6 +417,12 @@ const CHIP_ORDER = ["key", "def", "ex", "q", "test", "section"];
 
 /* What's new: newest first. Each run adds one entry at the top (id = date + short slug). */
 const CHANGES = [
+  { id: "2026-11-06-tables", d: "2026-11-06", t: "Tables in your notes", b: [
+    "Type a note with | between the columns, like “Stage | Where | ATP”. It shows as a table row.",
+    "Notes one after another with | join into one table; the first one is the header row.",
+    "Tables come out as real tables in PDF, Word and the plain text export.",
+    "Handy for comparing things (stages, causes and effects, terms): comparison tables help you see how ideas connect."
+  ] },
   { id: "2026-11-05-icon", d: "2026-11-05", t: "A new Home Screen icon", b: [
     "Scribble's icon is now a pause sign whose second bar is a pencil: pause the video, then write.",
     "To get it, add Scribble to your Home Screen again (Share → Add to Home Screen). Save a backup first, then restore it in the new icon."
@@ -899,9 +919,76 @@ function libraryHTML() {
   </div>`;
 }
 
+/* ---------- tables typed into notes: "Stage | Where | ATP" (one row per line or per note) ---------- */
+const isSepCells = cells => cells.every(c => /^:?-+:?$/.test(c));
+function tableCells(line) {
+  const s = String(line).trim();
+  if (!s.includes("|")) return null;
+  const cells = s.replace(/^\|/, "").replace(/\|$/, "").split("|").map(c => c.trim());
+  if (cells.length < 2) return null;
+  if (isSepCells(cells)) return { cells, sep: true };
+  return cells.filter(Boolean).length >= 2 ? { cells, sep: false } : null;
+}
+// Rows in a note, or null when the note isn't table text (every non-empty line must be a row).
+function noteTable(text) {
+  const lines = String(text).split("\n").filter(x => x.trim());
+  if (!lines.length) return null;
+  const rows = lines.map(tableCells);
+  if (!rows.every(Boolean)) return null;
+  return rows.some(r => !r.sep) || rows.length === 1 ? rows : null; // a lone "---|---" line is a divider row
+}
+// Groups consecutive table notes (same indent, not headings) into tables: [{ head, rows, cols, notes }].
+function tableRun(notes, i) {
+  const first = notes[i];
+  if (!first || first.tag === "section" || !noteTable(first.text) || noteTable(first.text)[0].sep) return null;
+  // A note with several | lines is a table of its own; one-line row notes in a row join up.
+  const one = n => n && n.tag !== "section" && n.level === first.level && noteTable(n.text)?.length === 1;
+  const run = [first];
+  if (one(first)) for (let j = i + 1; one(notes[j]); j++) run.push(notes[j]);
+  const all = [];
+  run.forEach(n => noteTable(n.text).forEach((r, k) => { if (!r.sep) all.push(k === 0 && n.tag === "test" ? ["★ " + r.cells[0], ...r.cells.slice(1)] : r.cells); }));
+  const cols = Math.min(8, Math.max(...all.map(r => r.length)));
+  const pad = r => { const c = r.slice(0, cols); if (r.length > cols) c[cols - 1] = r.slice(cols - 1).join(" | "); while (c.length < cols) c.push(""); return c; };
+  return { head: pad(all[0]), rows: all.slice(1).map(pad), cols, notes: run };
+}
+// On screen: rows in a run share one set of column widths (sized to the longest text in each column).
+function tableLayout(list) {
+  const out = new Map();
+  for (let i = 0; i < list.length; i++) {
+    const one = n => n && n.tag !== "section" && n.level === list[i].level && noteTable(n.text)?.length === 1;
+    if (!one(list[i])) continue;
+    const run = [list[i]]; while (one(list[i + run.length])) run.push(list[i + run.length]);
+    const rows = run.map(n => noteTable(n.text)[0]), cols = Math.min(8, Math.max(...rows.map(r => r.cells.length)));
+    const w = Array.from({ length: cols }, (_, k) => Math.max(3, Math.min(22, Math.max(0, ...rows.filter(r => !r.sep).map(r => (r.cells[k] || "").length)))));
+    const word = Array.from({ length: cols }, (_, k) => Math.max(1, ...rows.filter(r => !r.sep).flatMap(r => (r.cells[k] || "").split(/\s+/).map(x => x.length))));
+    const wsum = word.reduce((t, v) => t + v + 2, 0);
+    // Each column is at least as wide as its longest word when it fits (never more than its share), so words don't break.
+    const lay = { cols, tpl: w.map((x, k) => `minmax(min(${((word[k] + 2) * 0.55).toFixed(2)}rem,${Math.floor(100 * (word[k] + 2) / wsum)}%),${x}fr)`).join(" "), head: run[0].id };
+    run.forEach(n => out.set(n.id, lay));
+    i += run.length - 1;
+  }
+  return out;
+}
+function cellsHTML(cells, terms) { return cells.map(c => `<span class="tc">${hl(c, terms)}</span>`).join(""); }
+function noteTextHTML(n, terms, lay) {
+  const rows = n.tag === "section" ? null : noteTable(n.text);
+  if (!rows) return `<span class="txt">${hl(n.text, terms)}</span>`;
+  if (rows.length === 1) {
+    const c = rows[0].cells.slice(), k = lay ? lay.cols : c.length;
+    if (c.length > k) c.splice(k - 1, c.length, c.slice(k - 1).join(" | "));
+    while (c.length < k) c.push("");
+    const st = ` style="grid-template-columns:${lay ? lay.tpl : `repeat(${k},minmax(0,1fr))`}"`, head = !lay || lay.head === n.id ? " thead" : "";
+    return rows[0].sep ? `<span class="txt trow tsep" aria-label="Table divider"></span>` : `<span class="txt trow${head}"${st}>${cellsHTML(c, terms)}</span>`;
+  }
+  const body = rows.filter(r => !r.sep);
+  const cols = Math.max(...body.map(r => r.cells.length));
+  const cell = (c, h) => `<${h ? "th" : "td"}>${hl(c, terms)}</${h ? "th" : "td"}>`;
+  return `<span class="txt"><span class="tscroll"><table class="ntable">${body.map((r, i) => `<tr>${Array.from({ length: cols }, (_, k) => cell(r.cells[k] || "", i === 0)).join("")}</tr>`).join("")}</table></span></span>`;
+}
+
 function noteRow(n, opts = {}) {
   const tag = n.tag && n.tag !== "section" ? `<span class="tag ${n.tag}">${esc(n.tag === "test" ? "★ Test" : TAGS[n.tag].label)}</span>` : "";
-  const cls = ["note", n.tag === "section" ? "section" : "", n.tag === "test" ? "test" : "", opts.sel ? "sel" : "", opts.anchor ? "anchor" : "", opts.multi ? "pick" : ""].join(" ");
+  const cls = ["note", n.tag === "section" ? "section" : "", n.tag === "test" ? "test" : "", opts.sel ? "sel" : "", opts.anchor ? "anchor" : "", opts.multi ? "pick" : "", n.tag !== "section" && noteTable(n.text)?.length === 1 ? "trow-note" : ""].join(" ");
   if (opts.editing) {
     return `<li class="${cls}" data-level="${n.level}" data-id="${n.id}"><div class="editbox">
       <textarea class="field" id="editText" rows="3">${esc(n.text)}</textarea>
@@ -909,7 +996,7 @@ function noteRow(n, opts = {}) {
     </div></li>`;
   }
   const act = opts.click ? `data-act="${opts.click === true ? "select" : opts.click}" tabindex="0"${opts.multi ? ` role="checkbox" aria-checked="${!!opts.sel}"` : ""}${opts.click === "insertHere" ? ` aria-label="Add notes below: ${esc(n.text)}"` : ""}` : "";
-  return `<li class="${cls}" data-level="${n.level}" data-id="${n.id}" ${act}><span class="ts${opts.multi ? " chk" : ""}">${opts.multi ? "" : fmt(n.t)}</span><div class="body">${tag}<span class="txt">${hl(n.text, opts.terms)}</span></div></li>`;
+  return `<li class="${cls}" data-level="${n.level}" data-id="${n.id}" ${act}><span class="ts${opts.multi ? " chk" : ""}">${opts.multi ? "" : fmt(n.t)}</span><div class="body">${tag}${noteTextHTML(n, opts.terms, opts.lay)}</div></li>`;
 }
 
 function lessonHTML() {
@@ -947,14 +1034,14 @@ function captureHTML(l) {
     <div class="ins-banner" id="insBanner" ${S.insertAfter ? "" : "hidden"}>${insBannerHTML(l)}</div>
     <div class="chips" role="group" aria-label="Note type">${CHIP_ORDER.map(k => `<button type="button" class="chip ${k}" data-keepfocus data-act="chip" data-tag="${k}" aria-pressed="${S.draftTag === k}">${TAGS[k].chip}</button>`).join("")}</div>
     <div class="comp-row"><textarea id="draft" rows="1" placeholder="Type a note, then press Enter" aria-label="New note" enterkeyhint="send">${esc(S.draft)}</textarea><button class="btn primary" type="submit" data-keepfocus>Add</button></div>
-    <div class="comp-foot"><button type="button" class="btn small ghost warn" data-act="missed" data-keepfocus>⟲ Missed that — mark to rewatch</button><span class="hint">Shortcuts: <code>#</code> section <code>?</code> question <code>!</code> test</span></div>
+    <div class="comp-foot"><button type="button" class="btn small ghost warn" data-act="missed" data-keepfocus>⟲ Missed that — mark to rewatch</button><span class="hint">Shortcuts: <code>#</code> section <code>?</code> question <code>!</code> test <code>a | b</code> table row</span></div>
   </form>`;
 }
 function recentHTML(l) {
   if (!l.notes.length) return `<li class="sheet-empty">Your notes appear here with the video time beside each one. Try “# Introduction” to start a section.</li>`;
   const limit = 8, hidden = S.showAll ? 0 : Math.max(0, l.notes.length - limit);
   return (hidden ? `<li><button class="more-link" data-act="showAll">Show ${hidden} earlier note${hidden > 1 ? "s" : ""}</button></li>` : "") +
-    l.notes.slice(hidden).map(n => noteRow(n, { click: "insertHere", anchor: S.insertAfter === n.id })).join("");
+    (shown => { const lay = tableLayout(shown); return shown.map(n => noteRow(n, { click: "insertHere", anchor: S.insertAfter === n.id, lay: lay.get(n.id) })).join(""); })(l.notes.slice(hidden));
 }
 function insBannerHTML(l) {
   const a = S.insertAfter && l.notes.find(n => n.id === S.insertAfter);
@@ -974,7 +1061,8 @@ function orgView(l) {
     return false;
   });
   const matchCount = terms.length ? visible.filter(n => matchesAll(n.text, terms)).length : 0;
-  const list = visible.length ? visible.map(n => noteRow(n, { click: true, multi: S.multi, sel: S.multi ? S.msel.has(n.id) : S.selected === n.id, editing: S.editingId === n.id, terms })).join("") :
+  const lay = tableLayout(visible);
+  const list = visible.length ? visible.map(n => noteRow(n, { lay: lay.get(n.id), click: true, multi: S.multi, sel: S.multi ? S.msel.has(n.id) : S.selected === n.id, editing: S.editingId === n.id, terms })).join("") :
     `<li class="sheet-empty">${!l.notes.length ? "No notes yet. Add them in Take notes, or with the buttons below." : terms.length ? `No notes match “${esc(S.lessonQuery.trim())}”${S.filter !== "all" ? " with this filter" : ""}.` : "No notes of this type yet."}</li>`;
   const hint = S.multi ? `Tap notes to select them, then move or delete them together.${narrowed ? " Clear the search or filter to move them." : ""}`
     : terms.length ? `<b>${matchCount}</b> note${matchCount === 1 ? "" : "s"} match. Clear the search to reorder.` : `Tap a note to move, indent, retype or edit it.${S.filter !== "all" ? " Clear the filter to reorder." : ""}`;
@@ -1257,10 +1345,13 @@ function exportModel(l, extras = true) {
   B.push({ k: "title", t: l.title });
   B.push({ k: "meta", t: [l.course, new Date(l.createdAt).toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" }), l.elapsed ? "Video time " + fmt(l.elapsed) : ""].filter(Boolean).join("  ·  ") });
   if (!l.notes.length) B.push({ k: "para", t: "No notes yet." });
-  l.notes.forEach(n => {
-    if (n.tag === "section") { B.push({ k: "h2", t: n.text, ts: fmt(n.t) }); return; }
-    B.push({ k: "note", ts: fmt(n.t), tag: n.tag, label: n.tag ? TAGS[n.tag].label : "", text: n.text, level: Math.max(0, n.level - (hasSections ? 1 : 0)) });
-  });
+  for (let i = 0; i < l.notes.length; i++) {
+    const n = l.notes[i], lvl = Math.max(0, n.level - (hasSections ? 1 : 0));
+    if (n.tag === "section") { B.push({ k: "h2", t: n.text, ts: fmt(n.t) }); continue; }
+    const tr = tableRun(l.notes, i);
+    if (tr) { B.push({ k: "grid", ts: fmt(n.t), level: lvl, head: tr.head, rows: tr.rows, cols: tr.cols }); i += tr.notes.length - 1; continue; }
+    B.push({ k: "note", ts: fmt(n.t), tag: n.tag, label: n.tag ? TAGS[n.tag].label : "", text: n.text, level: lvl });
+  }
   const terms = glossary(l);
   if (terms.length) { B.push({ k: "h1", t: "Key terms" }); B.push({ k: "table", head: ["Term", "Meaning"], rows: terms.map(r => [r.term, r.meaning]) }); }
   if (extras) {
@@ -1371,6 +1462,29 @@ function makePDF(l, extras = true) {
       };
       y -= 6; need(lead * 3); row(b.head, true); b.rows.forEach(r => row(r, false)); y -= 4;
     }
+    else if (b.k === "grid") {
+      // A table typed into the notes: columns sized to their text, header row shaded and repeated on a new page.
+      const size = 9.5, lead = 12.5, pad = 4, x0 = M + TSW + b.level * 16, W = PW - M - x0;
+      const all = [b.head, ...b.rows];
+      const nat = Array.from({ length: b.cols }, (_, k) => Math.max(...all.map((r, ri) => pdfWidth(toWin(r[k] || ""), ri ? "R" : "B", size))) + 2 * pad + 1);
+      const tot = nat.reduce((a, v) => a + v, 0);
+      let ws = tot <= W ? nat.map(v => v * W / tot) : (() => { const q = nat.map(v => Math.sqrt(v)), qs = q.reduce((a, v) => a + v, 0); return q.map(v => v * W / qs); })();
+      const xs = []; ws.reduce((a, w, k) => (xs[k] = a, a + w), x0);
+      let first = true;
+      const row = (cells, head) => {
+        const ls = cells.map((c, k) => wrap([{ s: c, f: head ? "B" : "R", color: INK }], ws[k] - 2 * pad, size));
+        const h = Math.max(1, ...ls.map(a => a.length)) * lead + 2 * pad;
+        if (need(h) && !head) row(b.head, true);
+        const top = y;
+        if (first) { txt(M, top - pad - lead + 3, b.ts, "M", 8, MUTE); first = false; }
+        if (head) rect(x0, top - h, W, h, "0.89 0.91 0.98");
+        ls.forEach((L, k) => { let yy = top - pad; L.forEach(ln => { yy -= lead; let cx = xs[k] + pad; ln.forEach(r => { txt(cx, yy + 3, r.s, r.f, size, r.color); cx += pdfWidth(r.s, r.f, size); }); }); });
+        line(x0, top, x0 + W, top, RULE); line(x0, top - h, x0 + W, top - h, RULE);
+        xs.forEach(xx => line(xx, top, xx, top - h, RULE)); line(x0 + W, top, x0 + W, top - h, RULE);
+        y = top - h;
+      };
+      y -= 6; need(lead * 2 + 4 * pad); row(b.head, true); b.rows.forEach(r => row(r, false)); y -= 4;
+    }
   });
   return pdfAssemble(pages, l.title, PW, PH, M);
 }
@@ -1430,6 +1544,16 @@ function makeDOCX(l, extras = true) {
       const cell = (t, w, head) => `<w:tc><w:tcPr><w:tcW w:w="${w}" w:type="dxa"/>${head ? `<w:shd w:val="clear" w:color="auto" w:fill="E3E8FA"/>` : ""}</w:tcPr>${para(run(t, { b: head || w === 2800 }), { after: 0 })}</w:tc>`;
       const tr = (r, head) => `<w:tr>${head ? "<w:trPr><w:tblHeader/></w:trPr>" : ""}${cell(r[0], 2800, head)}${cell(r[1], 7280, head)}</w:tr>`;
       body.push(`<w:tbl><w:tblPr><w:tblW w:w="10080" w:type="dxa"/><w:tblBorders>${bd}</w:tblBorders><w:tblCellMar><w:top w:w="80" w:type="dxa"/><w:left w:w="100" w:type="dxa"/><w:bottom w:w="80" w:type="dxa"/><w:right w:w="100" w:type="dxa"/></w:tblCellMar><w:tblLook w:val="04A0" w:firstRow="1" w:lastRow="0" w:firstColumn="1" w:lastColumn="0" w:noHBand="0" w:noVBand="1"/></w:tblPr><w:tblGrid><w:gridCol w:w="2800"/><w:gridCol w:w="7280"/></w:tblGrid>${tr(b.head, true)}${b.rows.map(r => tr(r, false)).join("")}</w:tbl>`, para("", { after: 0 }));
+    }
+    else if (b.k === "grid") {
+      const bd = ["top", "left", "bottom", "right", "insideH", "insideV"].map(s => `<w:${s} w:val="single" w:sz="4" w:space="0" w:color="C9D2E3"/>`).join("");
+      const ind = 900 + b.level * 360, W = 10080 - ind, all = [b.head, ...b.rows];
+      const nat = Array.from({ length: b.cols }, (_, k) => Math.max(3, ...all.map(r => String(r[k] || "").length)));
+      const q = nat.map(v => Math.sqrt(v)), qs = q.reduce((a, v) => a + v, 0), ws = q.map(v => Math.floor(v * W / qs));
+      const cell = (t, w, head) => `<w:tc><w:tcPr><w:tcW w:w="${w}" w:type="dxa"/>${head ? `<w:shd w:val="clear" w:color="auto" w:fill="E3E8FA"/>` : ""}</w:tcPr>${para(run(t, { b: head }), { after: 0 })}</w:tc>`;
+      const tr = (r, head) => `<w:tr>${head ? "<w:trPr><w:tblHeader/></w:trPr>" : ""}${r.map((c, k) => cell(c, ws[k], head)).join("")}</w:tr>`;
+      body.push(para(run(b.ts, { font: "Consolas", color: "56637F", size: 17 }), { ind: 0, after: 40, keep: true }));
+      body.push(`<w:tbl><w:tblPr><w:tblW w:w="${W}" w:type="dxa"/><w:tblInd w:w="${ind}" w:type="dxa"/><w:tblBorders>${bd}</w:tblBorders><w:tblLayout w:type="fixed"/><w:tblCellMar><w:top w:w="60" w:type="dxa"/><w:left w:w="100" w:type="dxa"/><w:bottom w:w="60" w:type="dxa"/><w:right w:w="100" w:type="dxa"/></w:tblCellMar><w:tblLook w:val="04A0" w:firstRow="1" w:lastRow="0" w:firstColumn="0" w:lastColumn="0" w:noHBand="0" w:noVBand="1"/></w:tblPr><w:tblGrid>${ws.map(w => `<w:gridCol w:w="${w}"/>`).join("")}</w:tblGrid>${tr(b.head, true)}${b.rows.map(r => tr(r, false)).join("")}</w:tbl>`, para("", { after: 0 }));
     }
   });
   const W = 'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"';
@@ -1596,11 +1720,14 @@ function previewRestore(text) {
 /* ---------- export: text ---------- */
 function toMarkdown(l) {
   const out = [`# ${l.title}`, `${l.course ? l.course + " · " : ""}${new Date(l.createdAt).toLocaleDateString()}`, ""];
-  l.notes.forEach(n => {
-    if (n.tag === "section") { out.push("", `## ${n.text}`); return; }
+  for (let i = 0; i < l.notes.length; i++) {
+    const n = l.notes[i];
+    if (n.tag === "section") { out.push("", `## ${n.text}`); continue; }
+    const tr = tableRun(l.notes, i);
+    if (tr) { const md = r => "| " + r.map(c => c.replace(/\|/g, "\\|").replace(/\n/g, " ")).join(" | ") + " |"; out.push("", `[${fmt(n.t)}]`, "", md(tr.head), "| " + tr.head.map(() => "---").join(" | ") + " |", ...tr.rows.map(md), ""); i += tr.notes.length - 1; continue; }
     const tag = n.tag === "test" ? " ★" : n.tag ? ` (${TAGS[n.tag].label})` : "";
     out.push(`${"  ".repeat(Math.max(0, n.level - (l.notes.some(x => x.tag === "section") ? 1 : 0)))}- [${fmt(n.t)}] ${n.text}${tag}`);
-  });
+  }
   if (l.mySummary.trim()) out.push("", "## My summary", l.mySummary.trim());
   if (l.dump.trim()) out.push("", `## Brain dump (${new Date(l.dumpAt || Date.now()).toLocaleDateString()})`, l.dump.trim());
   if (l.ai?.summary?.length) out.push("", "## Claude's summary", ...l.ai.summary.map(s => "- " + s));
@@ -1855,7 +1982,7 @@ document.addEventListener("focusout", e => {
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && S.clock.running) { try { navigator.wakeLock?.request("screen").then(w => S.wake = w).catch(() => {}); } catch {} } });
 
 /* Read-only hook for the automated checks in tests/. */
-window.SCRIBBLE = Object.freeze({ CHANGES, makeBackup, readBackup, planRestore, moveMany, canMoveMany, dateGroup, nextStep, lessonSteps, searchTerms, matchesAll, hl, searchLessons, sectionGroups, buildDeck, normalize, toMarkdown, glossary, exportModel, makePDF, makeDOCX, toWin, crc32 });
+window.SCRIBBLE = Object.freeze({ CHANGES, tableCells, noteTable, tableRun, makeBackup, readBackup, planRestore, moveMany, canMoveMany, dateGroup, nextStep, lessonSteps, searchTerms, matchesAll, hl, searchLessons, sectionGroups, buildDeck, normalize, toMarkdown, glossary, exportModel, makePDF, makeDOCX, toWin, crc32 });
 
 /* ---------- boot ---------- */
 loadLocal();

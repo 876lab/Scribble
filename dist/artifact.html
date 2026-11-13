@@ -355,6 +355,26 @@ mark.hl{background:var(--hi);color:var(--hi-ink);border-radius:3px;padding:0 1px
 .hit .ts{font-family:var(--f-mono);font-variation-settings:"MONO" 1;font-size:.74rem;color:var(--muted);padding-top:2px;font-variant-numeric:tabular-nums}
 .hit .where{display:block;font-size:.72rem;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.06em}
 .hit .txt{min-width:0;overflow-wrap:anywhere}
+/* Lesson map (Summary): lanes of markers over the video length; shaded bands are quiet stretches */
+.lm-sum{margin:0 0 var(--s3);font-weight:700}
+.lm{display:flex;flex-direction:column;gap:6px}
+.lm-lane{display:grid;grid-template-columns:76px 1fr;align-items:center;gap:var(--s2)}
+.lm-name{font-size:.74rem;font-weight:700;color:var(--muted);white-space:nowrap}
+.lm-track{background:var(--paper);border:1px solid var(--rule);border-radius:6px;height:24px;padding:0 6px}
+.lm-in{position:relative;height:100%}
+.lm-quiet{position:absolute;top:0;bottom:0;background:repeating-linear-gradient(135deg,color-mix(in srgb,var(--t-q) 26%,transparent) 0 4px,transparent 4px 8px);border-left:1px dashed var(--t-q);border-right:1px dashed var(--t-q)}
+.lm-m{position:absolute;transform:translateX(-50%)}
+.lm-m.lm-note{top:6px;bottom:6px;width:2px;background:var(--muted);border-radius:1px}
+.lm-m.lm-sec{top:1px;bottom:1px;width:3px;background:var(--ink);border-radius:1px}
+.lm-m.lm-test{top:5px;width:12px;height:12px;border-radius:50%;background:var(--hi);border:2px solid var(--t-test)}
+.lm-m.lm-rw{top:3px;bottom:3px;width:4px;background:var(--t-rewatch);border-radius:2px}
+.lm-axis{display:flex;justify-content:space-between;margin-left:calc(76px + var(--s2));font-size:.72rem;color:var(--muted)}
+.lm-key{margin:var(--s2) 0 0;font-size:.8rem;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.lm-sw{display:inline-block;width:16px;height:12px;border:1px dashed var(--t-q);background:repeating-linear-gradient(135deg,color-mix(in srgb,var(--t-q) 26%,transparent) 0 4px,transparent 4px 8px)}
+.lm-sw.lm-sec{width:3px;border:0;background:var(--ink)}
+.lm-tip{margin:var(--s3) 0 var(--s2);font-size:.92rem}
+.lm-list{list-style:none;margin:0 calc(-1 * var(--s4)) calc(-1 * var(--s4));padding:0}
+.lm-list .hit{grid-template-columns:52px 1fr}
 .res-more{display:block;width:100%;border:0;border-top:1px solid var(--rule);background:none;padding:9px;color:var(--accent);font-weight:700;font-size:.88rem}
 .note.jump{animation:jump 2.2s ease-out}
 @keyframes jump{0%,40%{background:color-mix(in srgb,var(--hi) 55%,var(--sheet))}100%{background:transparent}}
@@ -417,6 +437,12 @@ const CHIP_ORDER = ["key", "def", "ex", "q", "test", "section"];
 
 /* What's new: newest first. Each run adds one entry at the top (id = date + short slug). */
 const CHANGES = [
+  { id: "2026-11-13-lesson-map", d: "2026-11-13", t: "Lesson map: see where you went quiet", b: [
+    "Summary now has a Lesson map: a strip for the whole video showing every note, ★ test note and rewatch mark.",
+    "Shaded parts are quiet stretches, 3 minutes or more with no notes. Attention tends to slip as a video goes on, so these are good places to rewatch before the test.",
+    "Tap a quiet stretch in the list to jump to the notes around it.",
+    "The map needs the lesson clock: tap the clock in Take notes when you press play."
+  ] },
   { id: "2026-11-06-tables", d: "2026-11-06", t: "Tables in your notes", b: [
     "Type a note with | between the columns, like “Stage | Where | ATP”. It shows as a table row.",
     "Notes one after another with | join into one table; the first one is the header row.",
@@ -1160,9 +1186,62 @@ function summaryHTML(l) {
         `<p class="muted" style="margin:0">Mark notes as Key idea, Definition or ★ On the test and they collect here, grouped by section.</p>`}
     </section>
     ${(() => { const g = glossary(l); return g.length ? `<section class="card"><p class="label">Key terms</p><div class="gloss-wrap"><table class="gloss"><thead><tr><th scope="col">Term</th><th scope="col">Meaning</th></tr></thead><tbody>${g.map(r => `<tr><td>${esc(r.term)}${r.src === "claude" ? `<span class="via">from Claude's summary</span>` : ""}</td><td>${esc(r.meaning)}</td></tr>`).join("")}</tbody></table></div><p class="muted" style="margin:var(--s2) 0 0;font-size:.84rem">Built from notes marked Definition and written as “term: meaning”.</p></section>` : ""; })()}
+    ${lessonMapHTML(l)}
     ${rw.length ? `<section class="card"><p class="label">Rewatch before the test</p><ul style="margin:0;padding-left:1.2em">${rw.map(n => `<li><span class="mono">${fmt(n.t)}</span> — ${esc(n.text)}</li>`).join("")}</ul></section>` : ""}
     <div class="row-wrap"><button class="btn" data-act="export">Export notes (PDF, Word)</button></div>
   </div>`;
+}
+
+/* Lesson map: where each note falls in the video, read from the note times (nothing new is saved).
+   A "quiet stretch" is 3+ minutes of video with no notes (also from the start, and up to the end of the clock).
+   It needs the lesson clock: when every time is 00:00 the map says how to get one. */
+const QUIET_SECS = 180;
+function lessonMap(l) {
+  const notes = l.notes.map((n, i) => ({ id: n.id, t: Math.max(0, +n.t || 0), tag: n.tag, text: n.text, i }))
+    .sort((a, b) => a.t - b.t || a.i - b.i);
+  const last = notes.length ? notes[notes.length - 1].t : 0;
+  const len = Math.max(+l.elapsed || 0, last);
+  const ok = notes.length > 0 && last > 0 && len >= 60;
+  const quiet = [];
+  if (ok) {
+    let prev = 0, before = null;
+    notes.forEach(n => { if (n.t - prev >= QUIET_SECS) quiet.push({ from: prev, to: n.t, before, after: n }); prev = n.t; before = n; });
+    if (len - prev >= QUIET_SECS) quiet.push({ from: prev, to: len, before, after: null });
+  }
+  return { ok, len, notes, quiet,
+    sections: notes.filter(n => n.tag === "section"), tests: notes.filter(n => n.tag === "test"), rewatch: notes.filter(n => n.tag === "rewatch") };
+}
+function lessonMapHTML(l) {
+  if (!l.notes.length) return "";
+  const M = lessonMap(l);
+  if (!M.ok) return M.notes.some(n => n.t > 0) ? "" : `<section class="card" id="lessonMap"><p class="label">Lesson map</p><p class="muted" style="margin:0;font-size:.92rem">Your notes have no video times, so there is no map for this lesson. Next time, tap the clock in Take notes when you press play, and this shows where your notes fall in the video and where you went quiet.</p></section>`;
+  const pct = t => Math.min(100, Math.max(0, t / M.len * 100)).toFixed(2) + "%";
+  const bands = M.quiet.map(q => `<span class="lm-quiet" style="left:${pct(q.from)};width:${(Math.max(0, q.to - q.from) / M.len * 100).toFixed(2)}%"></span>`).join("");
+  const mark = (n, cls) => `<span class="lm-m ${cls}" style="left:${pct(n.t)}"></span>`;
+  const plain = M.notes.filter(n => !["section", "test", "rewatch"].includes(n.tag));
+  const lane = (name, inner, cls = "") => `<div class="lm-lane ${cls}"><span class="lm-name">${name}</span><div class="lm-track"><div class="lm-in">${bands}${inner}</div></div></div>`;
+  const mins = s => { const m = Math.round(s / 60); return m + " min"; };
+  const cnt = M.notes.filter(n => n.tag !== "section").length;
+  const words = [`${cnt} note${cnt === 1 ? "" : "s"} over ${fmt(M.len)}`, M.quiet.length ? `${M.quiet.length} quiet stretch${M.quiet.length === 1 ? "" : "es"}` : "no quiet stretches"];
+  const desc = `Lesson map. ${words.join(", ")}. ${M.tests.length} test notes, ${M.rewatch.length} marked to rewatch.`;
+  const snip = n => { const s = String(n.text).replace(/\s+/g, " ").trim(); return s.length > 48 ? s.slice(0, 46).trimEnd() + "…" : s; };
+  const quietList = M.quiet.map(q => {
+    const target = q.after || q.before;
+    const where = q.after ? (q.before ? `between “${esc(snip(q.before))}” and “${esc(snip(q.after))}”` : `before your first note, “${esc(snip(q.after))}”`) : `after your last note, “${esc(snip(q.before))}”`;
+    return `<li><button class="hit" data-act="jump" data-id="${l.id}" data-note="${target.id}"><span class="ts">${mins(q.to - q.from)}</span><span class="txt"><b class="mono">${fmt(q.from)}–${fmt(q.to)}</b> no notes, ${where}</span></button></li>`;
+  }).join("");
+  return `<section class="card lmap" id="lessonMap"><p class="label">Lesson map</p>
+    <p class="lm-sum">${words.join(" · ")}</p>
+    <div class="lm" role="img" aria-label="${esc(desc)}">
+      ${lane("Notes", M.sections.map(n => mark(n, "lm-sec")).join("") + plain.map(n => mark(n, "lm-note")).join(""))}
+      ${lane("★ Test", M.tests.map(n => mark(n, "lm-test")).join(""))}
+      ${lane("⟲ Rewatch", M.rewatch.map(n => mark(n, "lm-rw")).join(""))}
+      <div class="lm-axis mono" aria-hidden="true"><span>00:00</span><span>${fmt(M.len / 2)}</span><span>${fmt(M.len)}</span></div>
+    </div>
+    <p class="lm-key muted"><span class="lm-sw"></span> No notes for 3+ minutes${M.sections.length ? ` · <span class="lm-sw lm-sec"></span> section starts` : ""}</p>
+    ${M.quiet.length ? `<p class="lm-tip">You may have drifted off in ${M.quiet.length === 1 ? "this part" : "these parts"}. Rewatch ${M.quiet.length === 1 ? "it" : "them"} before the test, or check your notes still make sense there.</p><ul class="lm-list">${quietList}</ul>`
+      : `<p class="lm-tip" style="margin-bottom:0">No quiet stretches: there is a note at least every 3 minutes.</p>`}
+  </section>`;
 }
 
 /* Notes grouped by section. Notes before the first section go in "Start of the lesson";
@@ -1982,7 +2061,7 @@ document.addEventListener("focusout", e => {
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && S.clock.running) { try { navigator.wakeLock?.request("screen").then(w => S.wake = w).catch(() => {}); } catch {} } });
 
 /* Read-only hook for the automated checks in tests/. */
-window.SCRIBBLE = Object.freeze({ CHANGES, tableCells, noteTable, tableRun, makeBackup, readBackup, planRestore, moveMany, canMoveMany, dateGroup, nextStep, lessonSteps, searchTerms, matchesAll, hl, searchLessons, sectionGroups, buildDeck, normalize, toMarkdown, glossary, exportModel, makePDF, makeDOCX, toWin, crc32 });
+window.SCRIBBLE = Object.freeze({ CHANGES, lessonMap, QUIET_SECS, tableCells, noteTable, tableRun, makeBackup, readBackup, planRestore, moveMany, canMoveMany, dateGroup, nextStep, lessonSteps, searchTerms, matchesAll, hl, searchLessons, sectionGroups, buildDeck, normalize, toMarkdown, glossary, exportModel, makePDF, makeDOCX, toWin, crc32 });
 
 /* ---------- boot ---------- */
 loadLocal();

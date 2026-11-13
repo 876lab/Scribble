@@ -537,6 +537,55 @@ const URL_ = process.env.SITE || 'file://' + path.resolve(__dirname, '..', 'inde
     const bad = await page.evaluate(x => new DOMParser().parseFromString(x, 'application/xml').getElementsByTagName('parsererror').length, d);
     ok(bad === 0 && (d.match(/<w:tbl>/g) || []).length === 3 && /<w:gridCol w:w="\d+"\/><w:gridCol w:w="\d+"\/><w:gridCol w:w="\d+"\/><\/w:tblGrid>/.test(d) && />Inner membrane</.test(d), 'Word file has real tables with the right columns'); }
 
+  // ---- Lesson map (Summary) ----
+  { const m = await page.evaluate(() => { const S = window.SCRIBBLE, N = (id, t, tag = '', text = 'note ' + id) => ({ id, t, tag, text, level: 0 });
+      const a = S.lessonMap(S.normalize({ id: 'x', elapsed: 1500, notes: [N('a', 240), N('b', 300, 'test'), N('c', 330), N('d', 700, 'rewatch'), N('e', 720), N('f', 60, 'section')] }));
+      const none = S.lessonMap(S.normalize({ id: 'y', notes: [N('a', 0), N('b', 0)] }));
+      const edge = S.lessonMap(S.normalize({ id: 'z', elapsed: 599, notes: [N('a', 20), N('b', 199), N('c', 379), N('d', 420)] }));
+      const empty = S.lessonMap(S.normalize({ id: 'w', notes: [] }));
+      return { q: a.quiet.map(q => [q.from, q.to, q.before && q.before.id, q.after && q.after.id]), order: a.notes.map(n => n.id), len: a.len, t: a.tests.length, r: a.rewatch.length, s: a.sections.length, none: none.ok, edge: edge.quiet.map(q => [q.from, q.to]), empty: empty.ok, Q: S.QUIET_SECS }; });
+    ok(m.Q === 180, 'a quiet stretch is 3 minutes');
+    ok(JSON.stringify(m.order) === '["f","a","b","c","d","e"]', 'map sorts notes by video time, not list order');
+    ok(JSON.stringify(m.q) === '[[60,240,"f","a"],[330,700,"c","d"],[720,1500,"e",null]]', 'quiet stretches found between notes and up to the end of the clock: ' + JSON.stringify(m.q));
+    ok(m.len === 1500 && m.t === 1 && m.r === 1 && m.s === 1, 'map counts test notes, rewatch marks and sections and spans the clock');
+    ok(JSON.stringify(m.edge) === '[[199,379]]', 'exactly 3 minutes counts as quiet, just under does not: ' + JSON.stringify(m.edge));
+    ok(m.none === false && m.empty === false, 'no map without the lesson clock or without notes'); }
+  await page.evaluate(() => { const ls = JSON.parse(localStorage.getItem('scribble.v1.lessons')); const N = (id, t, tag, text) => ({ id, t, tag, text, level: tag === 'section' ? 0 : 1 });
+    ls.push({ id: 'map', title: 'Map lesson', course: 'BIO 101', createdAt: Date.now(), updatedAt: Date.now() + 9000, elapsed: 2400, notes: [N('m1', 30, 'section', 'Intro'), N('m2', 60, 'key', 'Cells need energy'), N('m3', 150, 'test', 'ATP is the energy currency'), N('m4', 600, 'key', 'Glycolysis splits glucose'), N('m5', 640, 'rewatch', 'Missed something here'), N('m6', 700, 'section', 'Krebs cycle'), N('m7', 760, '', 'Runs in the matrix'), N('m8', 1500, 'test', 'Makes NADH and FADH2'), N('m9', 1560, '', 'Two turns per glucose')] });
+    ls.push({ id: 'noclock', title: 'No clock lesson', course: 'BIO 101', createdAt: Date.now(), updatedAt: Date.now() + 8000, notes: [{ id: 'k1', t: 0, tag: '', text: 'typed without the clock', level: 0 }] });
+    localStorage.setItem('scribble.v1.lessons', JSON.stringify(ls)); });
+  await page.reload(); await page.waitForSelector('.home');
+  await page.locator('.lesson', { hasText: 'Map lesson' }).first().click(); await page.waitForSelector('.tabs');
+  await page.click('[data-tab=summary]');
+  ok(await page.isVisible('#lessonMap'), 'Summary shows the lesson map');
+  ok(/7 notes over 40:00 · 3 quiet stretches/.test(await page.innerText('#lessonMap .lm-sum')), 'map summary line: ' + await page.innerText('#lessonMap .lm-sum'));
+  ok(await page.locator('#lessonMap .lm-m.lm-note').count() === 4 && await page.locator('#lessonMap .lm-m.lm-test').count() === 2 && await page.locator('#lessonMap .lm-m.lm-rw').count() === 1 && await page.locator('#lessonMap .lm-m.lm-sec').count() === 2, 'map draws notes, ★ test notes, rewatch marks and section starts');
+  ok(await page.locator('#lessonMap .lm-quiet').count() === 9, 'quiet stretches shaded on all three lanes');
+  { const pos = await page.evaluate(() => { const tr = document.querySelector('#lessonMap .lm-in').getBoundingClientRect(); return [...document.querySelectorAll('#lessonMap .lm-m.lm-test')].map(e => { const r = e.getBoundingClientRect(); return (r.left + r.width / 2 - tr.left) / tr.width; }); });
+    ok(Math.abs(pos[0] - 150 / 2400) < 0.02 && Math.abs(pos[1] - 1500 / 2400) < 0.02, 'markers sit at their video time: ' + pos.map(x => x.toFixed(3)).join(', ')); }
+  ok(/Lesson map\. 7 notes over 40:00, 3 quiet stretches\. 2 test notes, 1 marked to rewatch\./.test(await page.getAttribute('#lessonMap .lm', 'aria-label')), 'map has a spoken description');
+  { const items = await page.locator('#lessonMap .lm-list li').allInnerTexts();
+    ok(items.length === 3 && /02:30–10:00/.test(items[0]) && /8 min/.test(items[0]) && /between “ATP is the energy currency” and “Glycolysis splits glucose”/.test(items[0]) && /after your last note/.test(items[2]), 'quiet stretches listed with times and the notes around them: ' + JSON.stringify(items)); }
+  ok(!(await overflow()), 'lesson map: no sideways scrolling');
+  await page.locator('#lessonMap').scrollIntoViewIfNeeded();
+  await page.locator('#lessonMap').screenshot({ path: OUT + '/lesson-map.png' });
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await page.locator('#lessonMap').screenshot({ path: OUT + '/lesson-map-dark.png' });
+  ok(!(await overflow()), 'lesson map dark: no sideways scrolling');
+  { const c = await page.evaluate(() => { const e = document.querySelector('#lessonMap .lm-m.lm-note'), t = document.querySelector('#lessonMap .lm-track'); return [getComputedStyle(e).backgroundColor, getComputedStyle(t).backgroundColor]; });
+    ok(c[0] !== c[1], 'map markers stand out from the track in dark mode'); }
+  await page.emulateMedia({ colorScheme: 'light' });
+  await page.locator('#lessonMap .lm-list .hit').nth(1).click();
+  await page.waitForSelector('#orgList');
+  ok(await page.isVisible('#orgList .note[data-id=m4]'), 'tapping a quiet stretch jumps to the note after it in Organize');
+  await page.click('[data-tab=summary]');
+  { const ex = await page.evaluate(() => { const S = window.SCRIBBLE; return S.lessonMap(S.normalize({ id: 'e', elapsed: 742, notes: [40, 65, 110, 190, 270, 285, 340, 435, 482, 570, 605, 680, 705].map((t, i) => ({ id: 'n' + i, t, text: 'x' })) })).quiet.length; });
+    ok(ex === 0, 'the example lesson has no quiet stretches'); }
+    await page.reload(); await page.waitForSelector('.home');
+  await page.locator('.lesson', { hasText: 'No clock lesson' }).first().click(); await page.waitForSelector('.tabs');
+  await page.click('[data-tab=summary]');
+  ok(/no video times/.test(await page.innerText('#lessonMap')) && await page.locator('#lessonMap .lm').count() === 0, 'without the clock the map explains how to get one');
+
   ok(errors.length === 0, 'no page errors: ' + errors.join(' | '));
   await browser.close();
   console.log(`browser: ${pass} passed, ${fail} failed`);

@@ -584,7 +584,69 @@ const URL_ = process.env.SITE || 'file://' + path.resolve(__dirname, '..', 'inde
     await page.reload(); await page.waitForSelector('.home');
   await page.locator('.lesson', { hasText: 'No clock lesson' }).first().click(); await page.waitForSelector('.tabs');
   await page.click('[data-tab=summary]');
-  ok(/no video times/.test(await page.innerText('#lessonMap')) && await page.locator('#lessonMap .lm').count() === 0, 'without the clock the map explains how to get one');
+  ok(await page.locator('#lessonMap').count() === 0, 'without the clock there is no lesson map card');
+  ok(await page.locator('#makeCard').count() === 0, 'no Claude table or chart card where Claude is not available');
+
+  // ---- Make a table / Make a chart (claude.ai version, with a stand-in for Claude) ----
+  { const u = await page.evaluate(() => { const S = window.SCRIBBLE, N = (t, tag = '') => ({ id: Math.random() + '', t: 0, tag, text: t, level: 0 });
+      const L = x => S.normalize({ id: 'u', notes: x.map(t => N(t)) });
+      const t = S.cleanTable({ title: 'T', columns: ['Stage', 'Where | how', ''], rows: [['Glycolysis', 'Cytoplasm'], ['', ''], 'bad'] });
+      const c = S.cleanChart({ title: 'ATP', unit: 'ATP', points: [{ label: 'Glycolysis', value: 2 }, { label: 'Krebs', value: '2' }, { label: 'ETC', value: 34 }, { label: 'Made up', value: 99 }] }, L(['Glycolysis makes 2 ATP', 'Krebs makes 2', 'ETC makes about 34 ATP']));
+      const c2 = S.cleanChart({ points: [{ label: 'a', value: 5 }, { label: 'b', value: 6 }] }, L(['no numbers here 1']));
+      return { a: S.hasNumbers(L(['1. First point', '2. Second point'])), b: S.hasNumbers(L(['Glycolysis makes 2 ATP', 'ETC makes 34'])), d: S.hasNumbers(L(['Only 1 number'])),
+        nums: [...S.notesNumbers(L(['Population 1,200 and 3.5%', '1. Listed']))].sort((x, y) => x - y), t, c, c2, def: [S.normalize({ id: 'q' }).aiTable, S.normalize({ id: 'q' }).aiChart] }; });
+    ok(u.a === false && u.b === true && u.d === false, 'chart offered only when two or more notes have numbers (list numbers ignored): ' + [u.a, u.b, u.d]);
+    ok(JSON.stringify(u.nums) === '[3.5,1200]', 'numbers read from notes (commas, decimals, list numbers skipped): ' + JSON.stringify(u.nums));
+    ok(u.t && JSON.stringify(u.t.cols) === '["Stage","Where / how"]' && JSON.stringify(u.t.rows) === '[["Glycolysis","Cytoplasm"]]', 'table from Claude is cleaned (| removed, empty rows dropped): ' + JSON.stringify(u.t));
+    ok(u.c.points.length === 3 && u.c.dropped === 1 && u.c.points[1].value === 2, 'chart keeps only numbers that are in the notes');
+    ok(/aren't in your notes/.test(u.c2.error), 'a chart made of outside numbers is refused');
+    ok(u.def[0] === null && u.def[1] === null, 'old lessons get empty table and chart fields'); }
+  { const ctx2 = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
+    await ctx2.addInitScript(() => {
+      window.__prompts = [];
+      const sample = { json: async (prompt) => { window.__prompts.push(prompt); await new Promise(r => setTimeout(r, 150));
+        if (/comparison table/.test(prompt)) return { title: 'Stages of respiration', columns: ['Stage', 'Where', 'ATP made'], rows: [['Glycolysis', 'Cytoplasm', '2'], ['Krebs cycle', 'Mitochondrial matrix', '2'], ['Electron transport chain', 'Inner membrane', 'about 34']], missing: '' };
+        return { title: 'ATP made at each stage', unit: 'ATP', points: [{ label: 'Glycolysis', value: 2 }, { label: 'Krebs cycle', value: 2 }, { label: 'Electron transport chain', value: 34 }, { label: 'Invented', value: 120 }], note: 'Most ATP comes from the electron transport chain.' }; } };
+      window.claude = { use: async n => { if (n === 'sample') return sample; throw { code: 'not_declared' }; } };
+    });
+    const p2 = await ctx2.newPage();
+    await p2.route(/fonts\.(googleapis|gstatic)\.com/, r => r.abort());
+    p2.on('pageerror', e => errors.push('claude page: ' + e.message));
+    const of2 = () => p2.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1);
+    await p2.goto(URL_); await p2.waitForSelector('.home');
+    await p2.click('text=Open an example lesson'); await p2.waitForSelector('.tabs');
+    await p2.click('[data-tab=summary]');
+    ok(await p2.isVisible('#makeCard') && await p2.isVisible('[data-act=make][data-kind=table]') && await p2.isVisible('[data-act=make][data-kind=chart]'), 'claude.ai version offers Make a table and Make a chart');
+    ok(/Only your notes are used/.test(await p2.innerText('#makeCard')), 'card says only the notes are used');
+    await p2.click('[data-act=make][data-kind=table]');
+    ok(await p2.isVisible('#makeCard .thinking'), 'shows that Claude is working');
+    await p2.waitForSelector('#mkTable');
+    ok(await p2.locator('#mkTable th').count() === 3 && await p2.locator('#mkTable tbody tr').count() === 3, 'the table shows with its columns and rows');
+    ok(/use only facts in the notes/.test(await p2.evaluate(() => window.__prompts[0])) && /Glycolysis happens in the cytoplasm/.test(await p2.evaluate(() => window.__prompts[0])), 'the request sends the notes and asks for notes-only facts');
+    await p2.click('[data-act=make][data-kind=chart]');
+    await p2.waitForSelector('#mkChart');
+    ok(await p2.locator('#mkChart .bars li').count() === 3 && /1 number wasn't in your notes/.test(await p2.innerText('#mkChart')), 'the chart shows only numbers from the notes and says one was left out');
+    { const w = await p2.evaluate(() => [...document.querySelectorAll('#mkChart .bb')].map(b => b.getBoundingClientRect().width)); ok(w[2] > w[0] * 5 && Math.abs(w[0] - w[1]) < 1, 'bar lengths match the values: ' + w.map(Math.round)); }
+    ok(/Electron transport chain: 34 ATP/.test(await p2.getAttribute('#mkChart .bars', 'aria-label')), 'chart has a spoken description with the values');
+    ok(!(await of2()), 'tables and charts: no sideways scrolling');
+    await p2.locator('#makeCard').screenshot({ path: OUT + '/make-table-chart.png' });
+    await p2.emulateMedia({ colorScheme: 'dark' });
+    await p2.locator('#makeCard').screenshot({ path: OUT + '/make-table-chart-dark.png' });
+    ok(!(await of2()), 'tables and charts dark: no sideways scrolling');
+    await p2.emulateMedia({ colorScheme: 'light' });
+    await p2.click('[data-act=mkAdd][data-kind=table]');
+    ok(/Added to your notes/.test(await p2.innerText('#mkTable')), 'Add to my notes confirms');
+    const saved = await p2.evaluate(() => JSON.parse(localStorage.getItem('scribble.v1.lessons'))[0]);
+    ok(saved.aiTable && saved.aiTable.rows.length === 3 && saved.aiChart && saved.aiChart.points.length === 3, 'table and chart are saved with the lesson');
+    ok(saved.notes.some(n => n.tag === 'section' && n.text === 'Table: Stages of respiration') && saved.notes.some(n => n.text === 'Stage | Where | ATP made'), 'the table is added to the notes as table rows');
+    await p2.click('[data-act=mkAdd][data-kind=chart]');
+    await p2.click('[data-tab=organize]');
+    ok(await p2.locator('#orgList .trow-note', { hasText: 'Electron transport chain' }).count() >= 2, 'added rows show as tables in Organize');
+    await p2.reload(); await p2.waitForSelector('.home');
+    await p2.locator('.lesson').first().click(); await p2.waitForSelector('.tabs'); await p2.click('[data-tab=summary]');
+    ok(await p2.isVisible('#mkTable') && await p2.isVisible('#mkChart'), 'table and chart are still there after reopening');
+    await p2.evaluate(() => { window.__prompts = []; });
+    await ctx2.close(); }
 
   ok(errors.length === 0, 'no page errors: ' + errors.join(' | '));
   await browser.close();

@@ -417,6 +417,17 @@ mark.hl{background:var(--hi);color:var(--hi-ink);border-radius:3px;padding:0 1px
 .gloss th,.gloss td{border:1px solid var(--rule);padding:8px 10px;text-align:left;vertical-align:top}
 .gloss th{background:var(--accent-soft);font-size:.75rem;text-transform:uppercase;letter-spacing:.07em}
 .gloss td:first-child{font-weight:700;width:34%}
+/* Make a table / Make a chart (claude.ai version) */
+.mk-h{margin:0 0 var(--s2);font-family:var(--f-display);font-variation-settings:"CASL" .6;font-weight:750;font-size:1rem}
+.mk-table td:first-child{width:auto}
+.mk-out{margin:0 0 var(--s4)}
+.mk-note{margin:var(--s2) 0 0;font-size:.84rem}
+.bars{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.bars li{display:grid;grid-template-columns:minmax(0,36%) 1fr;align-items:center;gap:var(--s2);font-size:.88rem}
+.bars .bl{overflow-wrap:anywhere;line-height:1.25}
+.bars .bt{display:flex;align-items:center;gap:6px;min-width:0}
+.bars .bb{height:16px;min-width:3px;background:var(--accent);border-radius:0 4px 4px 0}
+.bars .bv{font-family:var(--f-mono);font-variation-settings:"MONO" 1;font-variant-numeric:tabular-nums;font-size:.8rem;white-space:nowrap;color:var(--ink)}
 .gloss .via{font-size:.72rem;color:var(--muted);font-weight:400;display:block}
 .overlay{position:fixed;inset:0;z-index:40;background:rgba(0,0,0,.45);display:grid;place-items:center;padding:max(16px,env(safe-area-inset-left,0px))}
 .overlay .card{width:min(560px,100%);max-height:80vh;min-height:0;display:flex;flex-direction:column;gap:var(--s3)}
@@ -455,6 +466,12 @@ const CHIP_ORDER = ["key", "def", "ex", "q", "test", "section"];
 
 /* What's new: newest first. Each run adds one entry at the top (id = date + short slug). */
 const CHANGES = [
+  { id: "2026-11-13-make-table", d: "2026-11-13", t: "Claude makes tables and charts from your notes", b: [
+    "In the claude.ai version, Summary → “Tables and charts”: tap Make a table and Claude turns your notes into a comparison table.",
+    "When your notes have numbers, Make a chart shows them as a bar chart. Any number that isn't in your notes is left out.",
+    "Tap “Add to my notes” to put the table (or the chart's numbers) at the end of your notes, so it exports to PDF and Word too.",
+    "The Lesson map only shows on lessons where the clock was running. Lessons without the clock no longer show a tip about it."
+  ] },
   { id: "2026-11-13-lesson-map", d: "2026-11-13", t: "Lesson map: see where you went quiet", b: [
     "Summary now has a Lesson map: a strip for the whole video showing every note, ★ test note and rewatch mark.",
     "Shaded parts are quiet stretches, 3 minutes or more with no notes. Attention tends to slip as a video goes on, so these are good places to rewatch before the test.",
@@ -530,7 +547,7 @@ const S = {
   clock: { running: false, base: 0, startedAt: 0, lessonId: null },
   nudgeMin: +(lsGet("scribble.nudge") ?? 5) || 0, lastNudgeAt: -1, nudgeOn: false,
   editingTime: false,
-  aiBusy: false, aiErr: "", aiCtl: null,
+  aiBusy: false, aiErr: "", aiCtl: null, makeBusy: "", makeErr: "", makeCtl: null,
   search: "", lessonQuery: "", jumpTo: null, homeView: lsGet("scribble.home.view") === "course" ? "course" : "date",
   quiz: null, dump: null, newsSeen: lsGet(NEWS_KEY) || "",
   mode: "local", syncState: "", db: null, col: null, sample: null, downloads: null
@@ -548,7 +565,9 @@ function normalize(l) {
     example: !!l.example,
     dump: typeof l.dump === "string" ? l.dump : "", dumpAt: +l.dumpAt || 0,
     dumpMarks: l.dumpMarks && typeof l.dumpMarks === "object" && !Array.isArray(l.dumpMarks) ? l.dumpMarks : {},
-    quizAt: +l.quizAt || 0
+    quizAt: +l.quizAt || 0,
+    aiTable: l.aiTable && Array.isArray(l.aiTable.cols) && Array.isArray(l.aiTable.rows) ? l.aiTable : null,
+    aiChart: l.aiChart && Array.isArray(l.aiChart.points) ? l.aiChart : null
   };
 }
 function loadLocal() { try { (JSON.parse(lsGet(LS_KEY) || "[]") || []).forEach(l => l && l.id && S.lessons.set(l.id, normalize(l))); } catch {} }
@@ -652,7 +671,7 @@ function openLesson(id, tab = "capture", opts = {}) {
   if (S.clock.running && S.clock.lessonId !== id) stopClock();
   S.lessonQuery = opts.query || ""; S.jumpTo = opts.jump || null; S.multi = false; S.msel.clear(); S.insertAfter = null;
   S.currentId = id; S.view = "lesson"; S.tab = tab; S.selected = null; S.editingId = null;
-  S.filter = "all"; S.showAll = false; S.confirmDelete = false; S.quiz = null; S.dump = null; stopDumpTimer(); S.aiErr = ""; S.nudgeOn = false;
+  S.filter = "all"; S.showAll = false; S.confirmDelete = false; S.quiz = null; S.dump = null; stopDumpTimer(); S.aiErr = ""; S.makeErr = ""; S.nudgeOn = false;
   const l = cur();
   if (S.clock.lessonId !== id) { S.clock = { running: false, base: l ? l.elapsed : 0, startedAt: 0, lessonId: id }; S.lastNudgeAt = -1; }
   S.draft = ""; S.draftTag = ""; S.draftT = null;
@@ -759,7 +778,7 @@ function softRender() {
   const a = document.activeElement;
   if (a && /^(TEXTAREA|INPUT|SELECT)$/.test(a.tagName)) { setSync(S.syncState); return; }
   if (S.view === "lesson" && !cur()) { goLibrary(); return; }
-  if (S.editingId || S.aiBusy) return;
+  if (S.editingId || S.aiBusy || S.makeBusy) return;
   render();
 }
 function render() {
@@ -1195,6 +1214,7 @@ function summaryHTML(l) {
   else ai = `<p class="muted" style="margin:0">Claude summaries aren't available on this page right now. Your key points and own summary below still work.</p>`;
   return `<div class="stack">
     <section class="card"><p class="label">Claude's summary</p>${S.aiErr ? `<p class="ai-err">${esc(S.aiErr)}</p>` : ""}${ai}</section>
+    ${makeHTML(l)}
     <section class="card"><p class="label">In your own words</p>
       <p style="margin:0 0 var(--s3);font-size:.95rem">Cover your notes and write 3–5 sentences from memory. Then check them against your notes. Recalling it yourself is what makes it stick for the test.</p>
       <textarea class="field" id="mySummary" rows="6" placeholder="This lesson was about…">${esc(l.mySummary)}</textarea>
@@ -1212,7 +1232,7 @@ function summaryHTML(l) {
 
 /* Lesson map: where each note falls in the video, read from the note times (nothing new is saved).
    A "quiet stretch" is 3+ minutes of video with no notes (also from the start, and up to the end of the clock).
-   It needs the lesson clock: when every time is 00:00 the map says how to get one. */
+   It needs the lesson clock: when every time is 00:00 the card is hidden. */
 const QUIET_SECS = 180;
 function lessonMap(l) {
   const notes = l.notes.map((n, i) => ({ id: n.id, t: Math.max(0, +n.t || 0), tag: n.tag, text: n.text, i }))
@@ -1232,7 +1252,7 @@ function lessonMap(l) {
 function lessonMapHTML(l) {
   if (!l.notes.length) return "";
   const M = lessonMap(l);
-  if (!M.ok) return M.notes.some(n => n.t > 0) ? "" : `<section class="card" id="lessonMap"><p class="label">Lesson map</p><p class="muted" style="margin:0;font-size:.92rem">Your notes have no video times, so there is no map for this lesson. Next time, tap the clock in Take notes when you press play, and this shows where your notes fall in the video and where you went quiet.</p></section>`;
+  if (!M.ok) return ""; /* no clock times: no card (the owner doesn't use the clock, 2026-11-13) */
   const pct = t => Math.min(100, Math.max(0, t / M.len * 100)).toFixed(2) + "%";
   const bands = M.quiet.map(q => `<span class="lm-quiet" style="left:${pct(q.from)};width:${(Math.max(0, q.to - q.from) / M.len * 100).toFixed(2)}%"></span>`).join("");
   const mark = (n, cls) => `<span class="lm-m ${cls}" style="left:${pct(n.t)}"></span>`;
@@ -1424,6 +1444,94 @@ Rules: use only what is in the notes; do not add outside facts. Up to 8 terms. W
     S.quiz = null; persist(l);
   } catch (e) { S.aiErr = aiErrCopy(e && e.code); }
   S.aiBusy = false; S.aiCtl = null; render();
+}
+
+/* ---------- Make a table / Make a chart (claude.ai version, sample capability) ----------
+   Both use only the lesson's notes. A chart is offered only when the notes contain numbers,
+   and every number Claude charts must appear in the notes (others are dropped). */
+const stripListNum = t => String(t).replace(/^\s*\d+[.)]\s+/, "");
+function notesNumbers(l) {
+  const out = new Set();
+  l.notes.forEach(n => { if (n.tag === "section" || n.tag === "rewatch") return;
+    (stripListNum(n.text).match(/-?\d[\d,]*(?:\.\d+)?/g) || []).forEach(x => { const v = +x.replace(/,/g, ""); if (isFinite(v)) out.add(v); }); });
+  return out;
+}
+function hasNumbers(l) { return l.notes.filter(n => n.tag !== "section" && n.tag !== "rewatch" && /\d/.test(stripListNum(n.text))).length >= 2; }
+const cellText = x => String(x ?? "").replace(/\|/g, "/").replace(/\s+/g, " ").trim().slice(0, 140);
+function cleanTable(r) {
+  const cols = (Array.isArray(r?.columns) ? r.columns : []).map(cellText).filter(Boolean).slice(0, 6);
+  if (cols.length < 2) return null;
+  const rows = (Array.isArray(r.rows) ? r.rows : []).filter(Array.isArray).map(row => cols.map((_, i) => cellText(row[i]) || "—")).filter(row => row.some(c => c !== "—")).slice(0, 15);
+  if (!rows.length) return null;
+  return { title: cellText(r.title) || "Comparison table", cols, rows, missing: cellText(r.missing) };
+}
+function cleanChart(r, l) {
+  const have = notesNumbers(l);
+  const pts = (Array.isArray(r?.points) ? r.points : []).map(p => ({ label: cellText(p && p.label), value: typeof p?.value === "number" ? p.value : +String(p?.value ?? "").replace(/,/g, "") }))
+    .filter(p => p.label && isFinite(p.value));
+  const kept = pts.filter(p => have.has(p.value)).slice(0, 12);
+  if (kept.length < 2) return { error: pts.length >= 2 ? "Claude's chart used numbers that aren't in your notes, so it wasn't shown. Try again." : "" };
+  return { title: cellText(r.title) || "From your notes", unit: cellText(r.unit).slice(0, 20), points: kept, note: cellText(r.note), dropped: pts.length - kept.length };
+}
+function fmtNum(v) { return Math.abs(v) >= 1000 ? v.toLocaleString("en-US") : String(v); }
+function barsHTML(c) {
+  const max = Math.max(...c.points.map(p => Math.abs(p.value))) || 1;
+  const desc = c.title + ". " + c.points.map(p => `${p.label}: ${fmtNum(p.value)}${c.unit ? " " + c.unit : ""}`).join("; ");
+  return `<ul class="bars" role="img" aria-label="${esc(desc)}">${c.points.map(p => `<li><span class="bl">${esc(p.label)}</span><span class="bt"><span class="bb" style="width:${(Math.abs(p.value) / max * 78).toFixed(1)}%"></span><span class="bv">${esc(fmtNum(p.value))}${c.unit ? " " + esc(c.unit) : ""}</span></span></li>`).join("")}</ul>`;
+}
+function makeHTML(l) {
+  const T = l.aiTable, C = l.aiChart, nums = hasNumbers(l), noteCount = l.notes.filter(n => n.tag !== "section").length;
+  if (!S.sample && !T && !C) return "";
+  const stale = x => x && x.noteCount !== noteCount ? `<p class="ai-stale" style="margin:0 0 var(--s2)">Your notes changed since this was made.</p>` : "";
+  const table = T ? `<div class="mk-out" id="mkTable">${stale(T)}<h4 class="mk-h">${esc(T.title)}</h4><div class="gloss-wrap"><table class="gloss mk-table"><thead><tr>${T.cols.map(c => `<th scope="col">${esc(c)}</th>`).join("")}</tr></thead><tbody>${T.rows.map(r => `<tr>${r.map(c => `<td>${esc(c)}</td>`).join("")}</tr>`).join("")}</tbody></table></div>
+      ${T.missing ? `<p class="mk-note muted">Not in your notes: ${esc(T.missing)}</p>` : ""}
+      <div class="row-wrap" style="margin-top:var(--s3)">${T.added ? `<span class="muted" style="font-size:.88rem">✓ Added to your notes</span>` : `<button class="btn small" data-act="mkAdd" data-kind="table">Add to my notes</button>`}${S.sample ? `<button class="btn small ghost" data-act="make" data-kind="table">Make a new one</button>` : ""}</div></div>` : "";
+  const chart = C ? `<div class="mk-out" id="mkChart">${stale(C)}<h4 class="mk-h">${esc(C.title)}</h4>${barsHTML(C)}
+      ${C.note ? `<p class="mk-note muted">${esc(C.note)}</p>` : ""}${C.dropped ? `<p class="mk-note muted">${C.dropped} number${C.dropped === 1 ? " wasn't" : "s weren't"} in your notes, so ${C.dropped === 1 ? "it was" : "they were"} left out.</p>` : ""}
+      <div class="row-wrap" style="margin-top:var(--s3)">${C.added ? `<span class="muted" style="font-size:.88rem">✓ Added to your notes</span>` : `<button class="btn small" data-act="mkAdd" data-kind="chart">Add numbers to my notes</button>`}${S.sample && nums ? `<button class="btn small ghost" data-act="make" data-kind="chart">Make a new one</button>` : ""}</div></div>` : "";
+  let actions = "";
+  if (S.makeBusy) actions = `<div class="thinking"><span class="dot"></span>Claude is making a ${S.makeBusy} from your ${noteCount} notes…<button class="btn small ghost" data-act="makeStop">Stop</button></div>`;
+  else if (S.sample && (!T || (!C && nums))) actions = `${!T && !C ? `<p style="margin:0 0 var(--s3);font-size:.95rem">Claude can turn this lesson's notes into a comparison table${nums ? ", or a chart of the numbers in them" : ""}. Only your notes are used.</p>` : ""}<div class="row-wrap">${!T ? `<button class="btn${C ? "" : " primary"}" data-act="make" data-kind="table" ${noteCount ? "" : "disabled"}>Make a table</button>` : ""}${!C && nums ? `<button class="btn" data-act="make" data-kind="chart">Make a chart</button>` : ""}</div>`;
+  return `<section class="card" id="makeCard"><p class="label">Tables and charts</p>${S.makeErr ? `<p class="ai-err" style="margin-bottom:var(--s2)">${esc(S.makeErr)}</p>` : ""}${table}${chart}${actions}</section>`;
+}
+async function runMake(kind) {
+  const l = cur(); if (!l || !S.sample || S.makeBusy || S.aiBusy) return;
+  const head = `A student took these notes while watching a recorded lesson titled "${l.title}"${l.course ? ` for the course "${l.course}"` : ""}. Each line has the video time, an optional note type, and the note. Indentation shows sub-points. A line with | between parts is a table row.
+
+NOTES:
+${notesForAI(l)}
+
+`;
+  const prompt = kind === "table" ? head + `Make ONE comparison table from these notes that would help the student revise for a test: rows are the things the notes compare (stages, types, causes, people, events), columns are the features the notes give for them.
+Reply with only a JSON object in this shape:
+{"title": "a short title", "columns": ["2 to 5 column headings; the first names the things being compared"], "rows": [["one short cell per column"]], "missing": "one short line naming what the notes don't cover, or an empty string"}
+Rules: use only facts in the notes and never add outside facts; write "—" in a cell the notes don't cover; 2 to 12 rows; cells under 12 words. If the notes have nothing to compare, reply {"none": "one short reason"}.`
+    : head + `Find numbers in these notes that are worth seeing as a bar chart when revising: amounts, counts, percentages or years that compare things on the same measure.
+Reply with only a JSON object in this shape:
+{"title": "a short title", "unit": "the unit of the values, like ATP or % (or an empty string)", "points": [{"label": "a short label", "value": 0}], "note": "one short sentence saying what the chart shows"}
+Rules: every value must be a number written in the notes ("about 34" is 34); all values on one measure; 2 to 12 points; never add outside numbers. If the notes have no such numbers, reply {"none": "one short reason"}.`;
+  S.makeBusy = kind; S.makeErr = ""; S.makeCtl = new AbortController(); render();
+  try {
+    const r = await S.sample.json(prompt, { signal: S.makeCtl.signal, cache: false });
+    if (!r || typeof r !== "object") throw { code: "invalid_json" };
+    const noteCount = l.notes.filter(n => n.tag !== "section").length;
+    if (r.none) S.makeErr = (kind === "table" ? "Claude didn't find things to compare in these notes" : "Claude didn't find numbers to chart in these notes") + (typeof r.none === "string" ? ": " + cellText(r.none) : ".");
+    else if (kind === "table") { const t = cleanTable(r); if (!t) throw { code: "invalid_json" }; l.aiTable = { ...t, at: Date.now(), noteCount }; persist(l); }
+    else { const c = cleanChart(r, l); if (c.error !== undefined) { if (c.error) S.makeErr = c.error; else throw { code: "invalid_json" }; } else { l.aiChart = { ...c, at: Date.now(), noteCount }; persist(l); } }
+  } catch (e) { S.makeErr = aiErrCopy(e && e.code).replace("Tap Summarize", "Tap the button"); }
+  S.makeBusy = ""; S.makeCtl = null; render();
+}
+/* Adds the table (or the chart's numbers) to the end of the notes as a section and table-row notes,
+   so they show, search and export like any typed table. */
+function addMadeToNotes(kind) {
+  const l = cur(); if (!l) return;
+  const X = kind === "table" ? l.aiTable : l.aiChart; if (!X) return;
+  const t = l.notes.reduce((m, n) => Math.max(m, n.t), 0);
+  const rows = kind === "table" ? [X.cols, ...X.rows] : [["Item", X.unit ? "Value (" + X.unit + ")" : "Value"], ...X.points.map(p => [p.label, fmtNum(p.value)])];
+  l.notes.push({ id: mkId("n"), text: (kind === "table" ? "Table: " : "Chart: ") + X.title, tag: "section", level: 0, t });
+  rows.forEach(r => l.notes.push({ id: mkId("n"), text: r.join(" | "), tag: "", level: 1, t }));
+  X.added = true; persist(l); render();
+  toast((kind === "table" ? "Table" : "Numbers") + " added to the end of your notes.");
 }
 
 
@@ -1922,6 +2030,9 @@ document.addEventListener("click", async e => {
     case "deleteLesson": await deleteLesson(l.id); toast("Lesson deleted"); goLibrary(); break;
     case "ai": runAI(el.dataset.fresh === "1"); break;
     case "aiStop": S.aiCtl?.abort(); break;
+    case "make": runMake(el.dataset.kind); break;
+    case "makeStop": S.makeCtl?.abort(); break;
+    case "mkAdd": addMadeToNotes(el.dataset.kind); break;
     case "export": openExport(); break;
     case "closeLayer": if (e.target === el || el.tagName === "BUTTON") $("#layer").innerHTML = ""; break;
     case "copy": {
@@ -2079,7 +2190,7 @@ document.addEventListener("focusout", e => {
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && S.clock.running) { try { navigator.wakeLock?.request("screen").then(w => S.wake = w).catch(() => {}); } catch {} } });
 
 /* Read-only hook for the automated checks in tests/. */
-window.SCRIBBLE = Object.freeze({ CHANGES, lessonMap, QUIET_SECS, tableCells, noteTable, tableRun, makeBackup, readBackup, planRestore, moveMany, canMoveMany, dateGroup, nextStep, lessonSteps, searchTerms, matchesAll, hl, searchLessons, sectionGroups, buildDeck, normalize, toMarkdown, glossary, exportModel, makePDF, makeDOCX, toWin, crc32 });
+window.SCRIBBLE = Object.freeze({ CHANGES, hasNumbers, notesNumbers, cleanTable, cleanChart, lessonMap, QUIET_SECS, tableCells, noteTable, tableRun, makeBackup, readBackup, planRestore, moveMany, canMoveMany, dateGroup, nextStep, lessonSteps, searchTerms, matchesAll, hl, searchLessons, sectionGroups, buildDeck, normalize, toMarkdown, glossary, exportModel, makePDF, makeDOCX, toWin, crc32 });
 
 /* ---------- boot ---------- */
 loadLocal();

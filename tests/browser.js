@@ -648,6 +648,98 @@ const URL_ = process.env.SITE || 'file://' + path.resolve(__dirname, '..', 'inde
     await p2.evaluate(() => { window.__prompts = []; });
     await ctx2.close(); }
 
+  // ---- Course export: every lesson of a course in one PDF or Word file ----
+  { const ctx3 = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, acceptDownloads: true });
+    const day = 864e5, now = Date.now();
+    const seed = [
+      { id: 'c2', title: 'Krebs cycle', course: 'BIO 101', createdAt: now - 2 * day, updatedAt: now - 2 * day, elapsed: 900, mySummary: 'The Krebs cycle makes NADH.', notes: [{ id: 'a1', tag: 'section', text: 'Steps', t: 10, level: 0 }, { id: 'a2', tag: 'def', text: 'NADH: an electron carrier', t: 20, level: 1 }, { id: 'a3', tag: 'test', text: 'Two turns per glucose', t: 30, level: 1 }, { id: 'a4', tag: 'rewatch', text: 'Missed something here', t: 40, level: 1 }] },
+      { id: 'c1', title: 'Glycolysis', course: 'BIO 101', createdAt: now - 5 * day, updatedAt: now - 5 * day, notes: [{ id: 'b1', tag: 'def', text: 'ATP: energy currency of the cell', t: 0, level: 0 }, { id: 'b2', tag: '', text: 'Stage | Where | ATP', t: 0, level: 0 }, { id: 'b3', tag: '', text: 'Glycolysis | Cytoplasm | 2', t: 0, level: 0 }, { id: 'b4', tag: 'def', text: 'nadh: repeated term', t: 0, level: 0 }] },
+      { id: 'c3', title: 'Electron transport', course: 'BIO 101 ', createdAt: now - 1 * day, updatedAt: now - 1 * day, notes: [] },
+      { id: 'solo', title: 'Pricing', course: 'Business', createdAt: now, updatedAt: now, notes: [{ id: 's1', tag: '', text: 'Price on value', t: 0, level: 0 }] },
+      { id: 'none', title: 'Loose lesson', course: '', createdAt: now, updatedAt: now, notes: [{ id: 'n1', tag: '', text: 'No course here', t: 0, level: 0 }] }
+    ];
+    await ctx3.addInitScript(s => { if (!localStorage.getItem('scribble.v1.lessons')) { localStorage.setItem('scribble.v1.lessons', JSON.stringify(s)); localStorage.setItem('scribble.home.view', 'course'); } }, seed);
+    const p3 = await ctx3.newPage();
+    await p3.route(/fonts\.(googleapis|gstatic)\.com/, r => r.abort());
+    p3.on('pageerror', e => errors.push('course page: ' + e.message));
+    const of3 = () => p3.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1);
+    await p3.goto(URL_); await p3.waitForSelector('.home');
+    const before = await p3.evaluate(() => localStorage.getItem('scribble.v1.lessons'));
+    const cm = await p3.evaluate(() => { const { courseLessons, courseDoc, courseModel, toMarkdown } = window.SCRIBBLE; const ls = courseLessons('BIO 101'); const c = courseDoc('BIO 101');
+      const B = courseModel(c), B2 = courseModel(c, false);
+      return { order: ls.map(l => l.id), lessonsB: B.filter(b => b.k === 'lesson').map(b => b.t), title: B[0].t, meta: B[1].t, toc: B.find(b => b.k === 'bullets').items.length,
+        kinds: [...new Set(B.map(b => b.k))], terms: B.filter(b => b.k === 'table').map(b => b.rows), titles: B.filter(b => b.k === 'title').length,
+        h3: B.filter(b => b.k === 'h3').map(b => b.t), h3off: B2.filter(b => b.k === 'h3').map(b => b.t), md: toMarkdown(c), none: courseLessons('').length }; });
+    ok(cm.order.join() === 'c1,c2,c3', 'course export takes the course lessons oldest first (a trailing space in the course name still matches): ' + cm.order);
+    ok(cm.title === 'BIO 101' && /^3 lessons  ·  7 notes  ·  /.test(cm.meta) && cm.titles === 1 && cm.toc === 3, 'course export has one title, a summary line and a list of lessons: ' + cm.meta);
+    ok(JSON.stringify(cm.lessonsB) === JSON.stringify(['Lesson 1: Glycolysis', 'Lesson 2: Krebs cycle', 'Lesson 3: Electron transport', 'Key terms for the whole course']), 'each lesson gets its own numbered heading: ' + cm.lessonsB.join(' | '));
+    ok(cm.kinds.includes('grid') && cm.kinds.includes('h2') && cm.kinds.includes('note'), 'lesson notes keep their sections and tables in a course export');
+    ok(cm.terms.length === 1 && cm.terms[0].length === 2 && cm.terms[0][0][0] === 'ATP' && /\(Lesson 1\)$/.test(cm.terms[0][0][1]) && /\(Lesson 1\)$/.test(cm.terms[0][1][1]), 'one Key terms table for the whole course, repeated terms once, with the lesson: ' + JSON.stringify(cm.terms));
+    ok(cm.h3.includes('My summary') && cm.h3.includes('Rewatch before the test') && cm.h3off.length === 0, 'each lesson keeps its summary and rewatch list (and they can be left out)');
+    ok(/^# BIO 101\n/.test(cm.md) && /\n## Lesson 2: Krebs cycle\n/.test(cm.md) && /\n### Steps\n/.test(cm.md) && /\n### My summary\n/.test(cm.md) && cm.none === 0, 'plain text course export nests lessons under the course');
+    // Home screen: Export on each course heading (not on "No course").
+    ok(await p3.locator('[data-act=exportCourse][data-course="BIO 101"]').isVisible() && await p3.locator('[data-act=exportCourse][data-course="Business"]').count() === 1 && await p3.locator('[data-act=exportCourse]').count() === 2, 'By course: each course heading has an Export button, No course has none');
+    ok(!(await of3()), 'home by course with Export buttons: no sideways scrolling');
+    await p3.screenshot({ path: OUT + '/course-export-home.png' });
+    await p3.click('[data-act=exportCourse][data-course="BIO 101"]');
+    ok(await p3.isVisible('#exportPanel') && (await p3.innerText('#exportTitle')) === 'Export course' && /BIO 101 · 3 lessons, oldest first/.test(await p3.innerText('#expCourse')), 'Export on a course opens the course export');
+    ok(await p3.locator('#exportPanel .exp-scope').count() === 0, 'from home there is no lesson/course choice');
+    ok(!(await of3()), 'course export panel: no sideways scrolling');
+    await p3.screenshot({ path: OUT + '/course-export.png' });
+    const grab3 = async fmtx => { const [dl] = await Promise.all([p3.waitForEvent('download'), p3.click(`#exportPanel [data-fmt=${fmtx}]`)]); const f = path.join(OUT, 'course-export-' + fmtx + path.extname(dl.suggestedFilename())); await dl.saveAs(f); return { name: dl.suggestedFilename(), buf: fs.readFileSync(f) }; };
+    const cp = await grab3('pdf');
+    { const s = cp.buf.toString('latin1');
+      ok(cp.name === 'BIO 101 - all lessons.pdf', 'course PDF file name: ' + cp.name);
+      const xref = +s.match(/startxref\n(\d+)/)[1], rows = s.slice(xref).split('\n').slice(3).filter(r => / 00000 n $/.test(r)).map(r => +r.slice(0, 10));
+      ok(rows.length > 6 && rows.every((o, i) => s.startsWith(`${i + 1} 0 obj`, o)) && s.trimEnd().endsWith('%%EOF'), 'course PDF objects are where the index says');
+      const pages = +s.match(/\/Count (\d+)/)[1];
+      ok(pages >= 5, 'each lesson (and the key terms) starts on a new page: ' + pages + ' pages');
+      ok(/\(Lesson 1: Glycolysis\)/.test(s) && /\(Lesson 3: Electron transport\)/.test(s) && /Two turns per glucose/.test(s) && /\(Cytoplasm\)/.test(s) && /Key terms for the whole course/.test(s), 'course PDF has every lesson, its notes, tables and the key terms'); }
+    const cd = await grab3('docx');
+    { const b = cd.buf, files = {};
+      const eocd = b.lastIndexOf(Buffer.from([0x50, 0x4b, 0x05, 0x06])); let q = b.readUInt32LE(eocd + 16);
+      for (let i = 0; i < b.readUInt16LE(eocd + 10); i++) { const size = b.readUInt32LE(q + 20), nl = b.readUInt16LE(q + 28), off = b.readUInt32LE(q + 42), name = b.toString('utf8', q + 46, q + 46 + nl); const ln = b.readUInt16LE(off + 26); files[name] = b.subarray(off + 30 + ln, off + 30 + ln + size).toString('utf8'); q += 46 + nl; }
+      ok(cd.name === 'BIO 101 - all lessons.docx', 'course Word file name: ' + cd.name);
+      const bad = await p3.evaluate(parts => parts.filter(x => new DOMParser().parseFromString(x, 'application/xml').getElementsByTagName('parsererror').length).length, Object.values(files));
+      ok(bad === 0 && files['word/document.xml'], 'every part of the course Word file is well-formed XML');
+      const d = files['word/document.xml'];
+      ok((d.match(/<w:pageBreakBefore\/>/g) || []).length === 4 && /Heading3/.test(d) && /Heading3/.test(files['word/styles.xml']) && /Lesson 2: Krebs cycle/.test(d) && (d.match(/<w:tbl>/g) || []).length >= 2, 'course Word file: each lesson on a new page, lesson extras as small headings, tables kept'); }
+    await p3.emulateMedia({ colorScheme: 'dark' });
+    await p3.screenshot({ path: OUT + '/course-export-dark.png' });
+    ok(!(await of3()), 'course export dark: no sideways scrolling');
+    await p3.emulateMedia({ colorScheme: 'light' });
+    await p3.keyboard.press('Escape');
+    // From a lesson: choose This lesson or Whole course.
+    await p3.locator('.lesson', { hasText: 'Krebs cycle' }).click(); await p3.waitForSelector('.tabs');
+    await p3.click('[data-tab=summary]'); await p3.click('[data-act=export]');
+    ok(await p3.isVisible('#exportPanel .exp-scope') && await p3.getAttribute('[data-act=expScope][data-v=lesson]', 'aria-selected') === 'true' && /Whole course · 3 lessons/.test(await p3.innerText('[data-act=expScope][data-v=course]')), 'a lesson in a course offers This lesson or Whole course, This lesson first');
+    await p3.click('#exportPanel summary');
+    ok((await p3.inputValue('#exportText')).startsWith('# Krebs cycle'), 'This lesson exports just the lesson');
+    await p3.uncheck('#exportExtras');
+    await p3.click('[data-act=expScope][data-v=course]');
+    ok((await p3.innerText('#exportTitle')) === 'Export course' && await p3.getAttribute('[data-act=expScope][data-v=course]', 'aria-selected') === 'true', 'switching to Whole course updates the panel');
+    ok(!(await p3.isChecked('#exportExtras')), 'the extras choice is kept when switching');
+    await p3.click('#exportPanel summary');
+    ok((await p3.inputValue('#exportText')).startsWith('# BIO 101'), 'plain text switches to the whole course');
+    ok(!(await of3()), 'lesson export with the course choice: no sideways scrolling');
+    await p3.screenshot({ path: OUT + '/course-export-from-lesson.png' });
+    const cp2 = await grab3('pdf');
+    ok(cp2.name === 'BIO 101 - all lessons.pdf' && !/My summary/.test(cp2.buf.toString('latin1')) && /Lesson 1: Glycolysis/.test(cp2.buf.toString('latin1')), 'whole course from a lesson, without extras');
+    await p3.click('[data-act=expScope][data-v=lesson]');
+    ok((await p3.innerText('#exportTitle')) === 'Export notes', 'and back to This lesson');
+    await p3.keyboard.press('Escape');
+    await p3.click('[data-act=export]');
+    ok(await p3.getAttribute('[data-act=expScope][data-v=lesson]', 'aria-selected') === 'true', 'opening Export again starts on This lesson');
+    await p3.keyboard.press('Escape');
+    for (const t of ['Pricing', 'Loose lesson']) {
+      await p3.click('[data-act=home]'); await p3.locator('.lesson', { hasText: t }).click(); await p3.waitForSelector('.tabs');
+      await p3.click('[data-tab=summary]'); await p3.click('[data-act=export]');
+      ok(await p3.locator('#exportPanel .exp-scope').count() === 0, 'no course choice for a lesson that is alone or has no course: ' + t);
+      await p3.keyboard.press('Escape');
+    }
+    ok(await p3.evaluate(() => localStorage.getItem('scribble.v1.lessons')) === before, 'exporting a course changes no saved lesson');
+    await ctx3.close(); }
+
   ok(errors.length === 0, 'no page errors: ' + errors.join(' | '));
   await browser.close();
   console.log(`browser: ${pass} passed, ${fail} failed`);

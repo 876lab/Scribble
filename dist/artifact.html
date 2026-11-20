@@ -150,6 +150,11 @@ textarea.field{resize:vertical;line-height:1.5}
 .seg2 button[aria-selected="true"]{background:var(--ink);color:var(--paper)}
 .grp{display:flex;flex-direction:column;gap:var(--s2)}
 .grp-h{display:flex;align-items:baseline;gap:var(--s2);margin:var(--s2) 0 0;font-family:var(--f-display);font-variation-settings:"CASL" .5;font-weight:800;font-size:1rem}
+.grp-row{display:flex;align-items:center;justify-content:space-between;gap:var(--s2);margin-top:var(--s2)}
+.grp-row .grp-h{margin:0;flex-wrap:wrap;min-width:0}
+.grp-exp{flex:none}
+.exp-scope{align-self:flex-start;max-width:100%}
+.exp-course{margin:0;font-size:.9rem;line-height:1.4}
 .grp-h span{font-family:var(--f-body);font-weight:400;font-size:.82rem;color:var(--muted)}
 .groups{display:flex;flex-direction:column;gap:var(--s4)}
 .lrow{display:flex;justify-content:space-between;align-items:flex-start;gap:var(--s3)}
@@ -448,6 +453,12 @@ const CHIP_ORDER = ["key", "def", "ex", "q", "test", "section"];
 
 /* What's new: newest first. Each run adds one entry at the top (id = date + short slug). */
 const CHANGES = [
+  { id: "2026-11-20-course-export", d: "2026-11-20", t: "Export a whole course for exam revision", b: [
+    "Home → By course: tap Export next to a course to save all its lessons in one PDF or Word file.",
+    "Or in any lesson's Export, choose “Whole course” instead of “This lesson”.",
+    "Lessons come oldest first, each on its own page, with one Key terms table for the whole course at the end.",
+    "Handy before a final test that covers several lessons: going back over all your notes together helps you remember more."
+  ] },
   { id: "2026-11-13-make-table", d: "2026-11-13", t: "Claude makes tables and charts from your notes", b: [
     "In the claude.ai version, Summary → “Tables and charts”: tap Make a table and Claude turns your notes into a comparison table.",
     "When your notes have numbers, Make a chart shows them as a bar chart. Any number that isn't in your notes is left out.",
@@ -910,7 +921,8 @@ function groupsHTML(ls) {
     const keys = [...by.keys()].sort((a, b) => a === "No course" ? 1 : b === "No course" ? -1 : a.localeCompare(b));
     return keys.map(k => {
       const list = by.get(k).sort((a, b) => a.createdAt - b.createdAt), notes = list.reduce((a, l) => a + l.notes.filter(n => n.tag !== "section").length, 0);
-      return `<section class="grp"><h3 class="grp-h">${esc(k)} <span>${list.length} lesson${list.length === 1 ? "" : "s"} · ${notes} notes</span></h3><ul class="lesson-list">${list.map((l, i) => lessonCard(l, `<span class="lnum">Lesson ${i + 1}</span>`)).join("")}</ul></section>`;
+      const exp = k !== "No course" ? `<button class="btn small ghost grp-exp" data-act="exportCourse" data-course="${esc(k)}" aria-label="Export all ${list.length} lessons of ${esc(k)}">Export</button>` : "";
+      return `<section class="grp"><div class="grp-row"><h3 class="grp-h">${esc(k)} <span>${list.length} lesson${list.length === 1 ? "" : "s"} · ${notes} notes</span></h3>${exp}</div><ul class="lesson-list">${list.map((l, i) => lessonCard(l, `<span class="lnum">Lesson ${i + 1}</span>`)).join("")}</ul></section>`;
     }).join("");
   }
   const sorted = [...ls].sort((a, b) => b.createdAt - a.createdAt), groups = [];
@@ -1526,11 +1538,13 @@ function glossary(l) {
   (l.ai?.terms || []).forEach(t => t && t.term && add(String(t.term), String(t.meaning || ""), "claude"));
   return rows;
 }
-function exportModel(l, extras = true) {
+function exportModel(l, extras = true, inCourse = false) {
   const hasSections = l.notes.some(n => n.tag === "section");
-  const B = [];
-  B.push({ k: "title", t: l.title });
-  B.push({ k: "meta", t: [l.course, new Date(l.createdAt).toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" }), l.elapsed ? "Video time " + fmt(l.elapsed) : ""].filter(Boolean).join("  ·  ") });
+  const B = [], H = inCourse ? "h3" : "h1";
+  if (!inCourse) {
+    B.push({ k: "title", t: l.title });
+    B.push({ k: "meta", t: [l.course, new Date(l.createdAt).toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" }), l.elapsed ? "Video time " + fmt(l.elapsed) : ""].filter(Boolean).join("  ·  ") });
+  }
   if (!l.notes.length) B.push({ k: "para", t: "No notes yet." });
   for (let i = 0; i < l.notes.length; i++) {
     const n = l.notes[i], lvl = Math.max(0, n.level - (hasSections ? 1 : 0));
@@ -1539,18 +1553,39 @@ function exportModel(l, extras = true) {
     if (tr) { B.push({ k: "grid", ts: fmt(n.t), level: lvl, head: tr.head, rows: tr.rows, cols: tr.cols }); i += tr.notes.length - 1; continue; }
     B.push({ k: "note", ts: fmt(n.t), tag: n.tag, label: n.tag ? TAGS[n.tag].label : "", text: n.text, level: lvl });
   }
-  const terms = glossary(l);
+  const terms = inCourse ? [] : glossary(l);
   if (terms.length) { B.push({ k: "h1", t: "Key terms" }); B.push({ k: "table", head: ["Term", "Meaning"], rows: terms.map(r => [r.term, r.meaning]) }); }
   if (extras) {
-    if (l.mySummary.trim()) { B.push({ k: "h1", t: "My summary" }); B.push({ k: "para", t: l.mySummary.trim() }); }
-    if (l.dump.trim()) { B.push({ k: "h1", t: "Brain dump" + (l.dumpAt ? " (" + new Date(l.dumpAt).toLocaleDateString() + ")" : "") }); B.push({ k: "para", t: l.dump.trim() }); }
-    if (l.ai?.summary?.length) { B.push({ k: "h1", t: "Claude's summary" }); B.push({ k: "bullets", items: l.ai.summary.map(String) }); }
-    if (l.ai?.questions?.length) { B.push({ k: "h1", t: "Practice questions" }); B.push({ k: "qa", items: l.ai.questions.map(q => ({ q: String(q.q), a: String(q.a || "") })) }); }
+    if (l.mySummary.trim()) { B.push({ k: H, t: "My summary" }); B.push({ k: "para", t: l.mySummary.trim() }); }
+    if (l.dump.trim()) { B.push({ k: H, t: "Brain dump" + (l.dumpAt ? " (" + new Date(l.dumpAt).toLocaleDateString() + ")" : "") }); B.push({ k: "para", t: l.dump.trim() }); }
+    if (l.ai?.summary?.length) { B.push({ k: H, t: "Claude's summary" }); B.push({ k: "bullets", items: l.ai.summary.map(String) }); }
+    if (l.ai?.questions?.length) { B.push({ k: H, t: "Practice questions" }); B.push({ k: "qa", items: l.ai.questions.map(q => ({ q: String(q.q), a: String(q.a || "") })) }); }
     const rw = l.notes.filter(n => n.tag === "rewatch");
-    if (rw.length) { B.push({ k: "h1", t: "Rewatch before the test" }); B.push({ k: "bullets", items: rw.map(n => fmt(n.t) + "  " + n.text) }); }
+    if (rw.length) { B.push({ k: H, t: "Rewatch before the test" }); B.push({ k: "bullets", items: rw.map(n => fmt(n.t) + "  " + n.text) }); }
   }
   return B;
 }
+/* Course export: every lesson of one course, oldest first, in one file (for exam revision). */
+function courseKey(l) { return (l?.course || "").trim(); }
+function courseLessons(key) { return key ? [...S.lessons.values()].filter(l => courseKey(l) === key).sort((a, b) => a.createdAt - b.createdAt) : []; }
+function courseDoc(key, lessons = courseLessons(key)) { return { isCourse: true, title: key, course: key, lessons }; }
+function courseModel(c, extras = true) {
+  const L = c.lessons, d = ms => new Date(ms).toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" });
+  const notes = L.reduce((a, l) => a + l.notes.filter(n => n.tag !== "section").length, 0);
+  const span = L.length ? (d(L[0].createdAt) === d(L[L.length - 1].createdAt) ? d(L[0].createdAt) : d(L[0].createdAt) + " to " + d(L[L.length - 1].createdAt)) : "";
+  const B = [{ k: "title", t: c.title }, { k: "meta", t: [`${L.length} lesson${L.length === 1 ? "" : "s"}`, `${notes} notes`, span].filter(Boolean).join("  ·  ") }];
+  B.push({ k: "h1", t: "Lessons" });
+  B.push({ k: "bullets", items: L.map((l, i) => `Lesson ${i + 1}: ${l.title}  (${d(l.createdAt)})`) });
+  L.forEach((l, i) => {
+    B.push({ k: "lesson", t: `Lesson ${i + 1}: ${l.title}`, meta: [d(l.createdAt), l.elapsed ? "Video time " + fmt(l.elapsed) : ""].filter(Boolean).join("  ·  ") });
+    B.push(...exportModel(l, extras, true));
+  });
+  const rows = [], seen = new Set();
+  L.forEach((l, i) => glossary(l).forEach(r => { const k = r.term.toLowerCase(); if (!seen.has(k)) { seen.add(k); rows.push([r.term, r.meaning + "  (Lesson " + (i + 1) + ")"]); } }));
+  if (rows.length) { B.push({ k: "lesson", t: "Key terms for the whole course", meta: "" }); B.push({ k: "table", head: ["Term", "Meaning"], rows }); }
+  return B;
+}
+function docModel(src, extras) { return src.isCourse ? courseModel(src, extras) : exportModel(src, extras); }
 function exportName(l, ext) { return ((l.title || "notes").replace(/[^\w\- ]+/g, "").replace(/\s+/g, " ").trim().slice(0, 60) || "notes") + "." + ext; }
 
 /* --- PDF --- Standard fonts (Helvetica, Courier) in WinAnsi encoding; widths from the Adobe font metrics. */
@@ -1570,6 +1605,7 @@ function toWin(str) {
 }
 function pdfWidth(s, f, size) { if (f === "M") return s.length * 600 * size / 1000; const t = PDF_W[f === "B" ? "B" : "R"]; let w = 0; for (let i = 0; i < s.length; i++) { const c = s.charCodeAt(i); w += c >= 32 ? t[c - 32] : 0; } return w * size / 1000; }
 function makePDF(l, extras = true) {
+  // l is a lesson, or a whole course from courseDoc().
   const PW = 612, PH = 792, M = 54, BOT = 64, TSW = 40, INK = "0.075 0.125 0.231", MUTE = "0.37 0.42 0.52", RULE = "0.82 0.85 0.91";
   const TAGC = { key: "0.153 0.278 0.780", def: "0.071 0.502 0.353", ex: "0.455 0.275 0.745", q: "0.714 0.325 0.063", test: "0.478 0.369 0", rewatch: "0.702 0.137 0.251" };
   const pages = []; let ops, y;
@@ -1608,8 +1644,20 @@ function makePDF(l, extras = true) {
       let cx = x; L.forEach(r => { txt(cx, y, r.s, r.f, size, r.color); cx += pdfWidth(r.s, r.f, size); });
     });
   };
-  exportModel(l, extras).forEach(b => {
-    if (b.k === "title") { const ls = wrap([{ s: b.t, f: "B", color: INK }], PW - 2 * M, 20); drawLines(ls, M, 20, 24); y -= 4; }
+  docModel(l, extras).forEach(b => {
+    if (b.k === "lesson") {
+      // Each lesson of a course export starts on a new page.
+      if (y < PH - M - 1) newPage();
+      drawLines(wrap([{ s: b.t, f: "B", color: INK }], PW - 2 * M, 17), M, 17, 21);
+      if (b.meta) { y -= 2; drawLines(wrap([{ s: b.meta, f: "R", color: MUTE }], PW - 2 * M, 10), M, 10, 14); }
+      y -= 6; line(M, y, PW - M, y, RULE, 1); y -= 4;
+    }
+    else if (b.k === "h3") {
+      need(14 * 1.3 + 50); y -= 12;
+      drawLines(wrap([{ s: b.t, f: "B", color: MUTE }], PW - 2 * M, 11.5), M, 11.5, 15);
+      y -= 2;
+    }
+    else if (b.k === "title") { const ls = wrap([{ s: b.t, f: "B", color: INK }], PW - 2 * M, 20); drawLines(ls, M, 20, 24); y -= 4; }
     else if (b.k === "meta") { drawLines(wrap([{ s: b.t, f: "R", color: MUTE }], PW - 2 * M, 10), M, 10, 14); y -= 8; line(M, y, PW - M, y, RULE, 1); y -= 6; }
     else if (b.k === "h1" || b.k === "h2") {
       const size = b.k === "h1" ? 14 : 12.5, ls = wrap([{ s: b.t, f: "B", color: INK }], PW - 2 * M - (b.ts ? TSW : 0), size);
@@ -1714,8 +1762,10 @@ function makeDOCX(l, extras = true) {
   };
   const para = (runs, o = {}) => `<w:p><w:pPr>${o.style ? `<w:pStyle w:val="${o.style}"/>` : ""}${o.keep ? "<w:keepNext/>" : ""}${o.ind != null ? `<w:ind w:left="${o.ind}" w:hanging="${o.hang || 0}"/>` : ""}${o.after != null ? `<w:spacing w:after="${o.after}"/>` : ""}</w:pPr>${runs}</w:p>`;
   const body = [];
-  exportModel(l, extras).forEach(b => {
-    if (b.k === "title") body.push(para(run(b.t), { style: "Title" }));
+  docModel(l, extras).forEach(b => {
+    if (b.k === "lesson") { body.push(`<w:p><w:pPr><w:pStyle w:val="Heading1"/><w:pageBreakBefore/></w:pPr>${run(b.t)}</w:p>`); if (b.meta) body.push(para(run(b.meta, { color: "56637F" }), { after: 200 })); }
+    else if (b.k === "h3") body.push(para(run(b.t), { style: "Heading3" }));
+    else if (b.k === "title") body.push(para(run(b.t), { style: "Title" }));
     else if (b.k === "meta") body.push(para(run(b.t, { color: "56637F" }), { style: "Subtitle" }));
     else if (b.k === "h1") body.push(para(run(b.t), { style: "Heading1" }));
     else if (b.k === "h2") body.push(para(run(b.ts + "  ", { font: "Consolas", color: "56637F", size: 18 }) + run(b.t), { style: "Heading2" }));
@@ -1751,6 +1801,7 @@ function makeDOCX(l, extras = true) {
     + sty("Title", "Title", `<w:spacing w:after="60"/>`, `<w:b/><w:sz w:val="44"/><w:szCs w:val="44"/>`)
     + sty("Subtitle", "Subtitle", `<w:spacing w:after="240"/><w:pBdr><w:bottom w:val="single" w:sz="6" w:space="6" w:color="D6DEEB"/></w:pBdr>`, `<w:sz w:val="20"/>`)
     + sty("Heading1", "heading 1", `<w:keepNext/><w:spacing w:before="320" w:after="120"/><w:outlineLvl w:val="0"/>`, `<w:b/><w:color w:val="2747C7"/><w:sz w:val="30"/><w:szCs w:val="30"/>`)
+    + sty("Heading3", "heading 3", `<w:keepNext/><w:spacing w:before="240" w:after="80"/><w:outlineLvl w:val="2"/>`, `<w:b/><w:color w:val="56637F"/><w:sz w:val="23"/><w:szCs w:val="23"/>`)
     + sty("Heading2", "heading 2", `<w:keepNext/><w:spacing w:before="280" w:after="100"/><w:pBdr><w:bottom w:val="single" w:sz="8" w:space="2" w:color="13203B"/></w:pBdr><w:outlineLvl w:val="1"/>`, `<w:b/><w:sz w:val="26"/><w:szCs w:val="26"/>`)
     + `</w:styles>`;
   const now = new Date().toISOString().replace(/\.\d+Z$/, "Z");
@@ -1905,28 +1956,46 @@ function previewRestore(text) {
 }
 
 /* ---------- export: text ---------- */
-function toMarkdown(l) {
-  const out = [`# ${l.title}`, `${l.course ? l.course + " · " : ""}${new Date(l.createdAt).toLocaleDateString()}`, ""];
+function toMarkdown(l, d = 1) {
+  if (l.isCourse) return [`# ${l.title}`, `${l.lessons.length} lesson${l.lessons.length === 1 ? "" : "s"}`, "", ...l.lessons.map((x, i) => toMarkdown({ ...x, title: `Lesson ${i + 1}: ${x.title}` }, 2))].join("\n").replace(/\n{3,}/g, "\n\n");
+  const h = "#".repeat(d), h2 = h + "#";
+  const out = [`${h} ${l.title}`, `${l.course ? l.course + " · " : ""}${new Date(l.createdAt).toLocaleDateString()}`, ""];
   for (let i = 0; i < l.notes.length; i++) {
     const n = l.notes[i];
-    if (n.tag === "section") { out.push("", `## ${n.text}`); continue; }
+    if (n.tag === "section") { out.push("", `${h2} ${n.text}`); continue; }
     const tr = tableRun(l.notes, i);
     if (tr) { const md = r => "| " + r.map(c => c.replace(/\|/g, "\\|").replace(/\n/g, " ")).join(" | ") + " |"; out.push("", `[${fmt(n.t)}]`, "", md(tr.head), "| " + tr.head.map(() => "---").join(" | ") + " |", ...tr.rows.map(md), ""); i += tr.notes.length - 1; continue; }
     const tag = n.tag === "test" ? " ★" : n.tag ? ` (${TAGS[n.tag].label})` : "";
     out.push(`${"  ".repeat(Math.max(0, n.level - (l.notes.some(x => x.tag === "section") ? 1 : 0)))}- [${fmt(n.t)}] ${n.text}${tag}`);
   }
-  if (l.mySummary.trim()) out.push("", "## My summary", l.mySummary.trim());
-  if (l.dump.trim()) out.push("", `## Brain dump (${new Date(l.dumpAt || Date.now()).toLocaleDateString()})`, l.dump.trim());
-  if (l.ai?.summary?.length) out.push("", "## Claude's summary", ...l.ai.summary.map(s => "- " + s));
-  if (l.ai?.questions?.length) out.push("", "## Practice questions", ...l.ai.questions.map((q, i) => `${i + 1}. ${q.q}\n   Answer: ${q.a}`));
+  if (l.mySummary.trim()) out.push("", `${h2} My summary`, l.mySummary.trim());
+  if (l.dump.trim()) out.push("", `${h2} Brain dump (${new Date(l.dumpAt || Date.now()).toLocaleDateString()})`, l.dump.trim());
+  if (l.ai?.summary?.length) out.push("", `${h2} Claude's summary`, ...l.ai.summary.map(s => "- " + s));
+  if (l.ai?.questions?.length) out.push("", `${h2} Practice questions`, ...l.ai.questions.map((q, i) => `${i + 1}. ${q.q}\n   Answer: ${q.a}`));
   return out.join("\n").replace(/\n{3,}/g, "\n\n") + "\n";
 }
-function openExport() {
-  const l = cur(); if (!l) return;
+/* The export panel works on one lesson, or (scope "course") every lesson of its course. From the home screen's
+   By course view it opens straight on a course. */
+function exportSrc() {
+  const E = S.exp || {}, l = E.lessonId ? S.lessons.get(E.lessonId) : null;
+  if (E.scope === "course" && E.course) { const ls = courseLessons(E.course); if (ls.length) return courseDoc(E.course, ls); }
+  return l;
+}
+function openExport(course) {
+  const l = course ? null : cur();
+  if (!l && !course) return;
+  if (course && !courseLessons(course).length) return;
+  const key = course || courseKey(l), n = courseLessons(key).length;
+  if (!S.exp || S.exp.lessonId !== (l?.id || null) || S.exp.course !== key) S.exp = { lessonId: l?.id || null, course: key, scope: course ? "course" : "lesson" };
+  const src = exportSrc(); if (!src) return;
+  const isC = !!src.isCourse, all = isC ? src.lessons : [src];
   const canSave = !!S.downloads || !inFrame();
-  const extras = l.mySummary.trim() || l.dump.trim() || l.ai || l.notes.some(n => n.tag === "rewatch");
+  const extras = all.some(x => x.mySummary.trim() || x.dump.trim() || x.ai || x.notes.some(m => m.tag === "rewatch"));
+  const scope = l && key && n > 1 ? `<div class="seg2 exp-scope" role="tablist" aria-label="What to export"><button role="tab" data-act="expScope" data-v="lesson" aria-selected="${!isC}">This lesson</button><button role="tab" data-act="expScope" data-v="course" aria-selected="${isC}">Whole course · ${n} lessons</button></div>` : "";
+  const courseLine = isC ? `<p class="exp-course" id="expCourse"><b>${esc(src.title)}</b> · ${all.length} lesson${all.length === 1 ? "" : "s"}, oldest first. Each lesson starts on a new page, with one Key terms table for the whole course at the end.</p>` : "";
   $("#layer").innerHTML = `<div class="overlay" data-act="closeLayer"><div class="card export" role="dialog" aria-modal="true" aria-labelledby="exportTitle" id="exportPanel">
-    <div class="dump-head"><h3 class="h" id="exportTitle">Export notes</h3><button class="btn small ghost" data-act="closeLayer">Close</button></div>
+    <div class="dump-head"><h3 class="h" id="exportTitle">${isC ? "Export course" : "Export notes"}</h3><button class="btn small ghost" data-act="closeLayer">Close</button></div>
+    ${scope}${courseLine}
     ${canSave ? `<div class="fmt-grid">
       <button class="fmt" data-act="saveFmt" data-fmt="pdf"><span class="fmt-badge pdf">PDF</span><span><b>PDF</b><small>To read, print or send</small></span></button>
       <button class="fmt" data-act="saveFmt" data-fmt="docx"><span class="fmt-badge doc">W</span><span><b>Word (.docx)</b><small>To edit in Word or Google Docs</small></span></button>
@@ -1934,11 +2003,19 @@ function openExport() {
     ${extras ? `<label class="check"><input type="checkbox" id="exportExtras" checked> Include my summary, brain dump, Claude's summary, practice questions and rewatch list</label>` : ""}
     <p class="muted" style="margin:0;font-size:.84rem">Each note keeps its video time, sections become headings, ★ test notes are highlighted, and definitions written as “term: meaning” become a Key terms table.</p>
     <details class="more"><summary>Plain text</summary>
-      <textarea class="field" id="exportText" readonly aria-label="Notes as text">${esc(toMarkdown(l))}</textarea>
+      <textarea class="field" id="exportText" readonly aria-label="Notes as text">${esc(toMarkdown(src))}</textarea>
       <div class="row-wrap"><button class="btn small" data-act="copy">Copy text</button>${canSave ? `<button class="btn small" data-act="saveFmt" data-fmt="md">Save as .md</button>` : ""}</div>
     </details>
   </div></div>`;
   $("#layer .fmt, #layer .btn")?.focus();
+}
+function setExpScope(v) {
+  if (!S.exp) return;
+  const keep = $("#exportExtras") ? $("#exportExtras").checked : true;
+  S.exp.scope = v === "course" ? "course" : "lesson";
+  openExport(S.exp.lessonId ? undefined : S.exp.course);
+  if ($("#exportExtras")) $("#exportExtras").checked = keep;
+  $(`#exportPanel [data-act=expScope][data-v="${S.exp.scope}"]`)?.focus();
 }
 
 /* ---------- events ---------- */
@@ -1950,7 +2027,7 @@ document.addEventListener("click", async e => {
   switch (act) {
     case "home": goLibrary(); break;
     case "open": openLesson(el.dataset.id, el.dataset.tab || (S.lessons.get(el.dataset.id)?.notes.length ? "organize" : "capture")); break;
-    case "homeView": S.homeView = el.dataset.v === "course" ? "course" : "date"; lsSet("scribble.home.view", S.homeView); { const g = $("#groups"); if (g) g.innerHTML = groupsHTML([...S.lessons.values()]); document.querySelectorAll(".seg2 button").forEach(b => b.setAttribute("aria-selected", String(b.dataset.v === S.homeView))); } break;
+    case "homeView": S.homeView = el.dataset.v === "course" ? "course" : "date"; lsSet("scribble.home.view", S.homeView); { const g = $("#groups"); if (g) g.innerHTML = groupsHTML([...S.lessons.values()]); document.querySelectorAll(".seg2 [data-act=homeView]").forEach(b => b.setAttribute("aria-selected", String(b.dataset.v === S.homeView))); } break;
     case "newOpen": S.newOpen = true; render(); $("#nfTitle")?.focus(); break;
     case "cancelNew": S.newOpen = false; render(); break;
     case "example": { const x = exampleLesson(); openLesson(x.id, "organize"); break; }
@@ -2015,7 +2092,7 @@ document.addEventListener("click", async e => {
     case "make": runMake(el.dataset.kind); break;
     case "makeStop": S.makeCtl?.abort(); break;
     case "mkAdd": addMadeToNotes(el.dataset.kind); break;
-    case "export": openExport(); break;
+    case "export": S.exp = null; openExport(); break;
     case "closeLayer": if (e.target === el || el.tagName === "BUTTON") $("#layer").innerHTML = ""; break;
     case "copy": {
       const txt = $("#exportText");
@@ -2023,16 +2100,19 @@ document.addEventListener("click", async e => {
       catch { txt.focus(); txt.select(); toast("Selected — copy it from your keyboard menu"); }
       break;
     }
+    case "expScope": setExpScope(el.dataset.v); break;
+    case "exportCourse": S.exp = null; openExport(el.dataset.course); break;
     case "saveFmt": {
-      if (!l || el.disabled) break;
+      const src = exportSrc();
+      if (!src || el.disabled) break;
       const fmtx = el.dataset.fmt, extras = $("#exportExtras") ? $("#exportExtras").checked : true;
       el.disabled = true;
       try {
         let blob;
-        if (fmtx === "pdf") blob = new Blob([makePDF(l, extras)], { type: "application/pdf" });
-        else if (fmtx === "docx") blob = new Blob([makeDOCX(l, extras)], { type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" });
-        else blob = new Blob([toMarkdown(l)], { type: "text/markdown" });
-        await saveBlob(exportName(l, fmtx), blob);
+        if (fmtx === "pdf") blob = new Blob([makePDF(src, extras)], { type: "application/pdf" });
+        else if (fmtx === "docx") blob = new Blob([makeDOCX(src, extras)], { type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" });
+        else blob = new Blob([toMarkdown(src)], { type: "text/markdown" });
+        await saveBlob(exportName(src.isCourse ? { title: src.title + " - all lessons" } : src, fmtx), blob);
       } catch (err) { console.warn(err); toast("Couldn't make that file. Try again, or use Copy text."); }
       el.disabled = false;
       break;
@@ -2172,7 +2252,7 @@ document.addEventListener("focusout", e => {
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && S.clock.running) { try { navigator.wakeLock?.request("screen").then(w => S.wake = w).catch(() => {}); } catch {} } });
 
 /* Read-only hook for the automated checks in tests/. */
-window.SCRIBBLE = Object.freeze({ CHANGES, hasNumbers, notesNumbers, cleanTable, cleanChart, lessonMap, QUIET_SECS, tableCells, noteTable, tableRun, makeBackup, readBackup, planRestore, moveMany, canMoveMany, dateGroup, nextStep, lessonSteps, searchTerms, matchesAll, hl, searchLessons, sectionGroups, buildDeck, normalize, toMarkdown, glossary, exportModel, makePDF, makeDOCX, toWin, crc32 });
+window.SCRIBBLE = Object.freeze({ CHANGES, hasNumbers, notesNumbers, cleanTable, cleanChart, lessonMap, QUIET_SECS, tableCells, noteTable, tableRun, makeBackup, readBackup, planRestore, moveMany, canMoveMany, dateGroup, nextStep, lessonSteps, searchTerms, matchesAll, hl, searchLessons, sectionGroups, buildDeck, normalize, toMarkdown, glossary, exportModel, courseModel, courseLessons, courseDoc, makePDF, makeDOCX, toWin, crc32 });
 
 /* ---------- boot ---------- */
 loadLocal();

@@ -653,8 +653,8 @@ const URL_ = process.env.SITE || 'file://' + path.resolve(__dirname, '..', 'inde
     const day = 864e5, now = Date.now();
     const seed = [
       { id: 'c2', title: 'Krebs cycle', course: 'BIO 101', createdAt: now - 2 * day, updatedAt: now - 2 * day, elapsed: 900, mySummary: 'The Krebs cycle makes NADH.', notes: [{ id: 'a1', tag: 'section', text: 'Steps', t: 10, level: 0 }, { id: 'a2', tag: 'def', text: 'NADH: an electron carrier', t: 20, level: 1 }, { id: 'a3', tag: 'test', text: 'Two turns per glucose', t: 30, level: 1 }, { id: 'a4', tag: 'rewatch', text: 'Missed something here', t: 40, level: 1 }] },
-      { id: 'c1', title: 'Glycolysis', course: 'BIO 101', createdAt: now - 5 * day, updatedAt: now - 5 * day, notes: [{ id: 'b1', tag: 'def', text: 'ATP: energy currency of the cell', t: 0, level: 0 }, { id: 'b2', tag: '', text: 'Stage | Where | ATP', t: 0, level: 0 }, { id: 'b3', tag: '', text: 'Glycolysis | Cytoplasm | 2', t: 0, level: 0 }, { id: 'b4', tag: 'def', text: 'nadh: repeated term', t: 0, level: 0 }] },
-      { id: 'c3', title: 'Electron transport', course: 'BIO 101 ', createdAt: now - 1 * day, updatedAt: now - 1 * day, notes: [] },
+      { id: 'c1', title: 'Glycolysis', course: 'Bio 101', createdAt: now - 5 * day, updatedAt: now - 5 * day, notes: [{ id: 'b1', tag: 'def', text: 'ATP: energy currency of the cell', t: 0, level: 0 }, { id: 'b2', tag: '', text: 'Stage | Where | ATP', t: 0, level: 0 }, { id: 'b3', tag: '', text: 'Glycolysis | Cytoplasm | 2', t: 0, level: 0 }, { id: 'b4', tag: 'def', text: 'nadh: repeated term', t: 0, level: 0 }] },
+      { id: 'c3', title: 'Electron transport', course: 'BIO  101 ', createdAt: now - 1 * day, updatedAt: now - 1 * day, notes: [] },
       { id: 'solo', title: 'Pricing', course: 'Business', createdAt: now, updatedAt: now, notes: [{ id: 's1', tag: '', text: 'Price on value', t: 0, level: 0 }] },
       { id: 'none', title: 'Loose lesson', course: '', createdAt: now, updatedAt: now, notes: [{ id: 'n1', tag: '', text: 'No course here', t: 0, level: 0 }] }
     ];
@@ -670,13 +670,15 @@ const URL_ = process.env.SITE || 'file://' + path.resolve(__dirname, '..', 'inde
       return { order: ls.map(l => l.id), lessonsB: B.filter(b => b.k === 'lesson').map(b => b.t), title: B[0].t, meta: B[1].t, toc: B.find(b => b.k === 'bullets').items.length,
         kinds: [...new Set(B.map(b => b.k))], terms: B.filter(b => b.k === 'table').map(b => b.rows), titles: B.filter(b => b.k === 'title').length,
         h3: B.filter(b => b.k === 'h3').map(b => b.t), h3off: B2.filter(b => b.k === 'h3').map(b => b.t), md: toMarkdown(c), none: courseLessons('').length }; });
-    ok(cm.order.join() === 'c1,c2,c3', 'course export takes the course lessons oldest first (a trailing space in the course name still matches): ' + cm.order);
+    ok(cm.order.join() === 'c1,c2,c3', 'course export takes the course lessons oldest first (capitals and extra spaces in the course name still match): ' + cm.order);
     ok(cm.title === 'BIO 101' && /^3 lessons  ·  7 notes  ·  /.test(cm.meta) && cm.titles === 1 && cm.toc === 3, 'course export has one title, a summary line and a list of lessons: ' + cm.meta);
     ok(JSON.stringify(cm.lessonsB) === JSON.stringify(['Lesson 1: Glycolysis', 'Lesson 2: Krebs cycle', 'Lesson 3: Electron transport', 'Key terms for the whole course']), 'each lesson gets its own numbered heading: ' + cm.lessonsB.join(' | '));
     ok(cm.kinds.includes('grid') && cm.kinds.includes('h2') && cm.kinds.includes('note'), 'lesson notes keep their sections and tables in a course export');
     ok(cm.terms.length === 1 && cm.terms[0].length === 2 && cm.terms[0][0][0] === 'ATP' && /\(Lesson 1\)$/.test(cm.terms[0][0][1]) && /\(Lesson 1\)$/.test(cm.terms[0][1][1]), 'one Key terms table for the whole course, repeated terms once, with the lesson: ' + JSON.stringify(cm.terms));
     ok(cm.h3.includes('My summary') && cm.h3.includes('Rewatch before the test') && cm.h3off.length === 0, 'each lesson keeps its summary and rewatch list (and they can be left out)');
     ok(/^# BIO 101\n/.test(cm.md) && /\n## Lesson 2: Krebs cycle\n/.test(cm.md) && /\n### Steps\n/.test(cm.md) && /\n### My summary\n/.test(cm.md) && cm.none === 0, 'plain text course export nests lessons under the course');
+    { const g = await p3.evaluate(() => [...document.querySelectorAll('.grp-h')].map(h => h.textContent)); const fold = await p3.evaluate(() => window.SCRIBBLE.courseFold('  Bio   101 '));
+      ok(g.filter(x => /^bio 101/i.test(x)).length === 1 && g.some(x => x.startsWith('BIO 101 3 lessons')) && fold === 'bio 101', 'By course puts "Bio 101" and "BIO  101" under one heading, spelled as in the newest lesson: ' + g.join(' | ')); }
     // Home screen: Export on each course heading (not on "No course").
     ok(await p3.locator('[data-act=exportCourse][data-course="BIO 101"]').isVisible() && await p3.locator('[data-act=exportCourse][data-course="Business"]').count() === 1 && await p3.locator('[data-act=exportCourse]').count() === 2, 'By course: each course heading has an Export button, No course has none');
     ok(!(await of3()), 'home by course with Export buttons: no sideways scrolling');

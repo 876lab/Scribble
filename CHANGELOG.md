@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-22 (owner request): Course names ignore capitals
+- The owner asked for course matching to ignore capitalisation. "Bio 101", "BIO 101" and "bio  101" (capitals, extra or trailing spaces) are now one course in Home → By course and in course export (`courseFold()`). The heading and the export title use the spelling from the newest lesson in that course (`courseName()`). Saved lessons are unchanged: each keeps the course name as typed.
+- Tests: 301 browser checks (was 300): mixed capitals and spaces grouped under one heading with the newest spelling, and course export picks up all three lessons.
+
 ## 2026-11-20: Course export (owner request, fourth of five sub-items)
 - **Whole course in one file:** in Home → By course, each course heading (not "No course") has an **Export** button that opens the export panel on the whole course. In a lesson that shares its course with other lessons, the export panel has a **This lesson / Whole course · N lessons** choice (starts on This lesson; the extras tick-box is kept when switching). PDF, Word and plain text all work; the file is named "<course> - all lessons".
 - **Layout:** course title, a line with lessons, notes and date range, and a numbered list of lessons; then each lesson, oldest first, starts on a new page (PDF) or with a page break (Word, Heading 1) with its date and video time. Notes keep their sections, typed tables, ★ test highlights and times. A lesson's own summary, brain dump, Claude's summary, practice questions and rewatch list come under it as small headings (Word Heading 3), and can be left out with the tick-box. One **Key terms for the whole course** table at the end, each term once, with the lesson it came from. Plain text nests lessons under the course (`#` course, `##` lesson, `###` section).

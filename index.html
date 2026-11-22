@@ -471,6 +471,10 @@ const CHIP_ORDER = ["key", "def", "ex", "q", "test", "section"];
 
 /* What's new: newest first. Each run adds one entry at the top (id = date + short slug). */
 const CHANGES = [
+  { id: "2026-11-22-course-caps", d: "2026-11-22", t: "Course names ignore capitals", b: [
+    "“Bio 101”, “BIO 101” and “bio  101” now count as the same course, in By course and in course export.",
+    "The heading shows the name as you typed it in your newest lesson of that course."
+  ] },
   { id: "2026-11-20-course-export", d: "2026-11-20", t: "Export a whole course for exam revision", b: [
     "Home → By course: tap Export next to a course to save all its lessons in one PDF or Word file.",
     "Or in any lesson's Export, choose “Whole course” instead of “This lesson”.",
@@ -934,12 +938,14 @@ function lessonCard(l, eyebrow) {
 }
 function groupsHTML(ls) {
   if (S.homeView === "course") {
+    // Courses match whatever the capitals or extra spaces ("Bio 101" = "BIO  101"); the heading uses the newest lesson's spelling.
     const by = new Map();
-    ls.forEach(l => { const k = l.course.trim() || "No course"; if (!by.has(k)) by.set(k, []); by.get(k).push(l); });
-    const keys = [...by.keys()].sort((a, b) => a === "No course" ? 1 : b === "No course" ? -1 : a.localeCompare(b));
-    return keys.map(k => {
-      const list = by.get(k).sort((a, b) => a.createdAt - b.createdAt), notes = list.reduce((a, l) => a + l.notes.filter(n => n.tag !== "section").length, 0);
-      const exp = k !== "No course" ? `<button class="btn small ghost grp-exp" data-act="exportCourse" data-course="${esc(k)}" aria-label="Export all ${list.length} lessons of ${esc(k)}">Export</button>` : "";
+    ls.forEach(l => { const f = courseFold(l.course); if (!by.has(f)) by.set(f, []); by.get(f).push(l); });
+    const name = f => f ? courseName(by.get(f)) : "No course";
+    const keys = [...by.keys()].sort((a, b) => !a ? 1 : !b ? -1 : name(a).localeCompare(name(b)));
+    return keys.map(f => {
+      const k = name(f), list = by.get(f).sort((a, b) => a.createdAt - b.createdAt), notes = list.reduce((a, l) => a + l.notes.filter(n => n.tag !== "section").length, 0);
+      const exp = f ? `<button class="btn small ghost grp-exp" data-act="exportCourse" data-course="${esc(k)}" aria-label="Export all ${list.length} lessons of ${esc(k)}">Export</button>` : "";
       return `<section class="grp"><div class="grp-row"><h3 class="grp-h">${esc(k)} <span>${list.length} lesson${list.length === 1 ? "" : "s"} · ${notes} notes</span></h3>${exp}</div><ul class="lesson-list">${list.map((l, i) => lessonCard(l, `<span class="lnum">Lesson ${i + 1}</span>`)).join("")}</ul></section>`;
     }).join("");
   }
@@ -1585,8 +1591,10 @@ function exportModel(l, extras = true, inCourse = false) {
 }
 /* Course export: every lesson of one course, oldest first, in one file (for exam revision). */
 function courseKey(l) { return (l?.course || "").trim(); }
-function courseLessons(key) { return key ? [...S.lessons.values()].filter(l => courseKey(l) === key).sort((a, b) => a.createdAt - b.createdAt) : []; }
-function courseDoc(key, lessons = courseLessons(key)) { return { isCourse: true, title: key, course: key, lessons }; }
+function courseFold(s) { return String(s || "").trim().replace(/\s+/g, " ").toLowerCase(); }
+function courseName(lessons) { const l = [...lessons].sort((a, b) => b.createdAt - a.createdAt)[0]; return l ? courseKey(l).replace(/\s+/g, " ") : ""; }
+function courseLessons(key) { const f = courseFold(key); return f ? [...S.lessons.values()].filter(l => courseFold(l.course) === f).sort((a, b) => a.createdAt - b.createdAt) : []; }
+function courseDoc(key, lessons = courseLessons(key)) { const t = courseName(lessons) || key; return { isCourse: true, title: t, course: t, lessons }; }
 function courseModel(c, extras = true) {
   const L = c.lessons, d = ms => new Date(ms).toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" });
   const notes = L.reduce((a, l) => a + l.notes.filter(n => n.tag !== "section").length, 0);
@@ -2004,7 +2012,7 @@ function openExport(course) {
   if (!l && !course) return;
   if (course && !courseLessons(course).length) return;
   const key = course || courseKey(l), n = courseLessons(key).length;
-  if (!S.exp || S.exp.lessonId !== (l?.id || null) || S.exp.course !== key) S.exp = { lessonId: l?.id || null, course: key, scope: course ? "course" : "lesson" };
+  if (!S.exp || S.exp.lessonId !== (l?.id || null) || courseFold(S.exp.course) !== courseFold(key)) S.exp = { lessonId: l?.id || null, course: key, scope: course ? "course" : "lesson" };
   const src = exportSrc(); if (!src) return;
   const isC = !!src.isCourse, all = isC ? src.lessons : [src];
   const canSave = !!S.downloads || !inFrame();
@@ -2270,7 +2278,7 @@ document.addEventListener("focusout", e => {
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && S.clock.running) { try { navigator.wakeLock?.request("screen").then(w => S.wake = w).catch(() => {}); } catch {} } });
 
 /* Read-only hook for the automated checks in tests/. */
-window.SCRIBBLE = Object.freeze({ CHANGES, hasNumbers, notesNumbers, cleanTable, cleanChart, lessonMap, QUIET_SECS, tableCells, noteTable, tableRun, makeBackup, readBackup, planRestore, moveMany, canMoveMany, dateGroup, nextStep, lessonSteps, searchTerms, matchesAll, hl, searchLessons, sectionGroups, buildDeck, normalize, toMarkdown, glossary, exportModel, courseModel, courseLessons, courseDoc, makePDF, makeDOCX, toWin, crc32 });
+window.SCRIBBLE = Object.freeze({ CHANGES, hasNumbers, notesNumbers, cleanTable, cleanChart, lessonMap, QUIET_SECS, tableCells, noteTable, tableRun, makeBackup, readBackup, planRestore, moveMany, canMoveMany, dateGroup, nextStep, lessonSteps, searchTerms, matchesAll, hl, searchLessons, sectionGroups, buildDeck, normalize, toMarkdown, glossary, exportModel, courseModel, courseLessons, courseDoc, courseFold, makePDF, makeDOCX, toWin, crc32 });
 
 /* ---------- boot ---------- */
 loadLocal();

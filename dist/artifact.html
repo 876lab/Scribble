@@ -393,6 +393,11 @@ mark.hl{background:var(--hi);color:var(--hi-ink);border-radius:3px;padding:0 1px
 .fmt-badge{flex:none;width:38px;height:44px;border-radius:6px;display:grid;place-items:center;font-weight:800;font-size:.78rem;letter-spacing:.04em;color:#fff}
 .fmt-badge.pdf{background:#C4302B}
 .fmt-badge.doc{background:#2B579A;font-size:1.05rem}
+.flash-exp{border-top:1px solid var(--rule);padding-top:var(--s3);display:flex;flex-direction:column;gap:var(--s2)}
+.flash-exp .label{margin:0}
+.flash-exp ol{margin:0;padding-left:1.2em;font-size:.86rem;line-height:1.45}
+.flash-exp h4{margin:var(--s2) 0 2px;font-size:.88rem}
+.flash-exp textarea{white-space:pre;overflow-x:auto;min-height:120px}
 .check{display:flex;gap:var(--s2);align-items:flex-start;font-size:.9rem;line-height:1.35}
 .check input{margin-top:3px;width:18px;height:18px;flex:none;accent-color:var(--accent)}
 .more summary{cursor:pointer;font-weight:700;font-size:.9rem;color:var(--accent);padding:4px 0}
@@ -453,6 +458,12 @@ const CHIP_ORDER = ["key", "def", "ex", "q", "test", "section"];
 
 /* What's new: newest first. Each run adds one entry at the top (id = date + short slug). */
 const CHANGES = [
+  { id: "2026-11-27-flashcards", d: "2026-11-27", t: "Use your cards in Anki or Quizlet", b: [
+    "Export now has a Flashcards part: “Save for Anki (.csv)” saves your Quiz me cards as a file Anki can import, with the deck already named.",
+    "“Copy for Quizlet” copies the same cards to paste into Quizlet's Import box on quizlet.com.",
+    "Works for a whole course too. In Quiz me, tap “Use in Anki or Quizlet” to get there.",
+    "Cards from a question with no answer under it now say “check your notes” instead of a 00:00 time."
+  ] },
   { id: "2026-11-22-course-caps", d: "2026-11-22", t: "Course names ignore capitals", b: [
     "“Bio 101”, “BIO 101” and “bio  101” now count as the same course, in By course and in course export.",
     "The heading shows the name as you typed it in your newest lesson of that course."
@@ -1373,7 +1384,7 @@ function quizHTML(l) {
     </button>
     ${q.flipped ? "" : `<label class="ans-box"><span class="label" style="margin:0">Your answer</span><textarea class="field" id="quizAns" rows="3" placeholder="Type what you remember… (optional)" enterkeyhint="done">${esc(typed)}</textarea></label>`}
     ${q.flipped ? `<div class="row-wrap" style="justify-content:center"><button class="btn danger" data-act="grade" data-g="0">✗ Missed it</button><button class="btn primary" data-act="grade" data-g="1">✓ Got it</button></div>` : `<div class="row-wrap" style="justify-content:center"><button class="btn primary" data-act="flip">Show answer</button></div>`}
-    <div class="row-wrap" style="justify-content:center"><button class="btn small ghost" data-act="quizShuffle">Shuffle</button></div>
+    <div class="row-wrap" style="justify-content:center"><button class="btn small ghost" data-act="quizShuffle">Shuffle</button><button class="btn small ghost" data-act="export" data-to="flash">Use in Anki or Quizlet</button></div>
   </div>`;
 }
 
@@ -1982,6 +1993,47 @@ function toMarkdown(l, d = 1) {
   if (l.ai?.questions?.length) out.push("", `${h2} Practice questions`, ...l.ai.questions.map((q, i) => `${i + 1}. ${q.q}\n   Answer: ${q.a}`));
   return out.join("\n").replace(/\n{3,}/g, "\n\n") + "\n";
 }
+/* ---------- export: flashcards for Anki and Quizlet ----------
+   The same cards as Quiz me (buildDeck), for one lesson or a whole course. Anki gets a CSV file with
+   file headers (Anki 2.1.54+): comma-separated, quoted fields (line breaks kept), no HTML, Front/Back/Tags,
+   and a deck named after the course or lesson. Quizlet only imports pasted text, so it gets
+   "term<Tab>definition" lines with line breaks inside a card turned into spaces. */
+function flashCards(src) {
+  const out = [];
+  (src.isCourse ? src.lessons : [src]).forEach(l => buildDeck(l).forEach(c => {
+    let back = String(c.back || "").trim();
+    if (/^Answer from memory, then check the video at 0+:00\.$/.test(back)) back = "Answer from memory, then check your notes.";
+    const front = String(c.front || "").trim();
+    if (front) out.push({ front, back, lesson: l.title, course: l.course });
+  }));
+  return out;
+}
+const ankiTag = s => String(s || "").trim().replace(/\s+/g, "_").replace(/[^\p{L}\p{N}_\-]/gu, "").slice(0, 60);
+const ankiDeck = s => String(s || "").replace(/:+/g, " ").replace(/[\r\n"]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 80);
+function ankiCSV(src) {
+  const q = v => '"' + String(v).replace(/\r\n?/g, "\n").replace(/"/g, '""') + '"';
+  const deck = "Scribble::" + (ankiDeck(src.isCourse ? src.title : (src.course || src.title)) || "Notes");
+  const rows = flashCards(src).map(c => [c.front, c.back, ["Scribble", ankiTag(c.course), ankiTag(c.lesson)].filter(Boolean).filter((t, i, a) => a.indexOf(t) === i).join(" ")].map(q).join(","));
+  return ["#separator:Comma", "#html:false", "#deck:" + deck, "#columns:Front,Back,Tags", "#tags column:3", ...rows].join("\n") + "\n";
+}
+function quizletText(src) {
+  const one = v => String(v).replace(/[\t\r\n]+/g, " ").replace(/\s{2,}/g, " ").trim();
+  return flashCards(src).map(c => one(c.front) + "\t" + one(c.back)).join("\n");
+}
+function flashHTML(src, canSave) {
+  const n = flashCards(src).length;
+  if (!n) return `<div class="flash-exp" id="flashExp"><p class="label">Flashcards for Anki or Quizlet</p><p class="muted" style="margin:0;font-size:.86rem">No cards yet. Cards come from sections, notes marked Question, and Definitions written as “term: meaning”.</p></div>`;
+  return `<div class="flash-exp" id="flashExp">
+    <p class="label">Flashcards for Anki or Quizlet · ${n} card${n === 1 ? "" : "s"}</p>
+    <p class="muted" style="margin:0;font-size:.86rem">The same cards as Quiz me${src.isCourse ? ", from every lesson in the course" : ""}, to practise in a flashcard app.</p>
+    <div class="row-wrap">${canSave ? `<button class="btn small" data-act="saveFmt" data-fmt="csv">Save for Anki (.csv)</button>` : ""}<button class="btn small" data-act="copyQuizlet">Copy for Quizlet</button></div>
+    <details class="more" id="flashHow"><summary>How to import</summary>
+      ${canSave ? `<h4>Anki</h4><ol><li>Open Anki and choose <b>File → Import</b> (on a phone: <b>Import</b> in the menu).</li><li>Pick the .csv file. The deck and the Front, Back and Tags columns are filled in for you.</li><li>Check the note type is <b>Basic</b>, then tap <b>Import</b>.</li></ol>` : ""}
+      <h4>Quizlet (website only)</h4><ol><li>Tap <b>Copy for Quizlet</b>.</li><li>On quizlet.com, make a new flashcard set and choose <b>Import</b>.</li><li>Paste, then choose <b>Tab</b> between term and definition and <b>New line</b> between rows.</li></ol>
+      <textarea class="field" id="quizletText" readonly aria-label="Flashcards as text for Quizlet">${esc(quizletText(src))}</textarea>
+    </details>
+  </div>`;
+}
 /* The export panel works on one lesson, or (scope "course") every lesson of its course. From the home screen's
    By course view it opens straight on a course. */
 function exportSrc() {
@@ -2014,6 +2066,7 @@ function openExport(course) {
       <textarea class="field" id="exportText" readonly aria-label="Notes as text">${esc(toMarkdown(src))}</textarea>
       <div class="row-wrap"><button class="btn small" data-act="copy">Copy text</button>${canSave ? `<button class="btn small" data-act="saveFmt" data-fmt="md">Save as .md</button>` : ""}</div>
     </details>
+    ${flashHTML(src, canSave)}
   </div></div>`;
   $("#layer .fmt, #layer .btn")?.focus();
 }
@@ -2100,7 +2153,7 @@ document.addEventListener("click", async e => {
     case "make": runMake(el.dataset.kind); break;
     case "makeStop": S.makeCtl?.abort(); break;
     case "mkAdd": addMadeToNotes(el.dataset.kind); break;
-    case "export": S.exp = null; openExport(); break;
+    case "export": S.exp = null; openExport(); if (el.dataset.to === "flash") { const f = $("#flashExp"); f?.scrollIntoView({ block: "center" }); f?.querySelector(".btn")?.focus({ preventScroll: true }); } break;
     case "closeLayer": if (e.target === el || el.tagName === "BUTTON") $("#layer").innerHTML = ""; break;
     case "copy": {
       const txt = $("#exportText");
@@ -2109,6 +2162,12 @@ document.addEventListener("click", async e => {
       break;
     }
     case "expScope": setExpScope(el.dataset.v); break;
+    case "copyQuizlet": {
+      const txt = $("#quizletText"); if (!txt) break;
+      try { await navigator.clipboard.writeText(txt.value); toast("Copied " + txt.value.split("\n").length + " cards. Paste them into Quizlet's Import box."); }
+      catch { const d = $("#flashHow"); if (d) d.open = true; txt.focus(); txt.select(); toast("Selected — copy it from your keyboard menu"); }
+      break;
+    }
     case "exportCourse": S.exp = null; openExport(el.dataset.course); break;
     case "saveFmt": {
       const src = exportSrc();
@@ -2119,8 +2178,10 @@ document.addEventListener("click", async e => {
         let blob;
         if (fmtx === "pdf") blob = new Blob([makePDF(src, extras)], { type: "application/pdf" });
         else if (fmtx === "docx") blob = new Blob([makeDOCX(src, extras)], { type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" });
+        else if (fmtx === "csv") blob = new Blob([ankiCSV(src)], { type: "text/csv" });
         else blob = new Blob([toMarkdown(src)], { type: "text/markdown" });
-        await saveBlob(exportName(src.isCourse ? { title: src.title + " - all lessons" } : src, fmtx), blob);
+        const base = src.isCourse ? src.title + " - all lessons" : src.title;
+        await saveBlob(exportName({ title: fmtx === "csv" ? base.trim().slice(0, 46) + " - flashcards" : base }, fmtx), blob);
       } catch (err) { console.warn(err); toast("Couldn't make that file. Try again, or use Copy text."); }
       el.disabled = false;
       break;
@@ -2260,7 +2321,7 @@ document.addEventListener("focusout", e => {
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && S.clock.running) { try { navigator.wakeLock?.request("screen").then(w => S.wake = w).catch(() => {}); } catch {} } });
 
 /* Read-only hook for the automated checks in tests/. */
-window.SCRIBBLE = Object.freeze({ CHANGES, hasNumbers, notesNumbers, cleanTable, cleanChart, lessonMap, QUIET_SECS, tableCells, noteTable, tableRun, makeBackup, readBackup, planRestore, moveMany, canMoveMany, dateGroup, nextStep, lessonSteps, searchTerms, matchesAll, hl, searchLessons, sectionGroups, buildDeck, normalize, toMarkdown, glossary, exportModel, courseModel, courseLessons, courseDoc, courseFold, makePDF, makeDOCX, toWin, crc32 });
+window.SCRIBBLE = Object.freeze({ CHANGES, flashCards, ankiCSV, quizletText, hasNumbers, notesNumbers, cleanTable, cleanChart, lessonMap, QUIET_SECS, tableCells, noteTable, tableRun, makeBackup, readBackup, planRestore, moveMany, canMoveMany, dateGroup, nextStep, lessonSteps, searchTerms, matchesAll, hl, searchLessons, sectionGroups, buildDeck, normalize, toMarkdown, glossary, exportModel, courseModel, courseLessons, courseDoc, courseFold, makePDF, makeDOCX, toWin, crc32 });
 
 /* ---------- boot ---------- */
 loadLocal();

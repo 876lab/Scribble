@@ -286,6 +286,58 @@ const URL_ = process.env.SITE || 'file://' + path.resolve(__dirname, '..', 'inde
   ok((await page.inputValue('#exportText')).startsWith('# Cellular respiration'), 'plain text still available');
   await page.keyboard.press('Escape');
   ok(await page.isHidden('#exportPanel'), 'Escape closes the export panel');
+
+  // ---- Flashcards for Anki (CSV) and Quizlet (pasted text) ----
+  { const parseCSV = t => { const rows = []; let row = [], f = '', i = 0, inq = false; for (; i < t.length; i++) { const c = t[i]; if (inq) { if (c === '"' && t[i + 1] === '"') { f += '"'; i++; } else if (c === '"') inq = false; else f += c; } else if (c === '"') inq = true; else if (c === ',') { row.push(f); f = ''; } else if (c === '\n') { row.push(f); rows.push(row); row = []; f = ''; } else f += c; } if (f || row.length) { row.push(f); rows.push(row); } return rows; };
+    const savedBefore = await page.evaluate(() => localStorage.getItem('scribble.v1.lessons'));
+    const deckN = await page.evaluate(() => { const S = window.SCRIBBLE, l = JSON.parse(localStorage.getItem('scribble.v1.lessons')).map(S.normalize).find(x => x.title === 'Cellular respiration'); return S.buildDeck(l).length; });
+    await page.click('[data-act=export]');
+    ok(await page.isVisible('#flashExp') && new RegExp(`· ${deckN} cards?$`).test(await page.textContent('#flashExp .label')), 'export panel offers flashcards with the Quiz me card count: ' + deckN);
+    ok(await page.isVisible('[data-fmt=csv]') && await page.isVisible('[data-act=copyQuizlet]'), 'Save for Anki and Copy for Quizlet buttons shown');
+    const [dl] = await Promise.all([page.waitForEvent('download'), page.click('[data-fmt=csv]')]);
+    const csvPath = path.join(OUT, 'flashcards.csv'); await dl.saveAs(csvPath);
+    ok(dl.suggestedFilename() === 'Cellular respiration - flashcards.csv', 'Anki file name: ' + dl.suggestedFilename());
+    const csv = fs.readFileSync(csvPath, 'utf8'), lines = csv.split('\n');
+    ok(lines[0] === '#separator:Comma' && lines[1] === '#html:false' && /^#deck:Scribble::\S/.test(lines[2]) && lines[3] === '#columns:Front,Back,Tags' && lines[4] === '#tags column:3', 'Anki file headers: ' + lines.slice(0, 5).join(' / '));
+    ok(csv.charCodeAt(0) === 35, 'Anki file starts with the header, no byte-order mark');
+    const rows = parseCSV(csv.split('\n').filter(x => !x.startsWith('#')).join('\n'));
+    const fronts = await page.evaluate(() => { const S = window.SCRIBBLE, l = JSON.parse(localStorage.getItem('scribble.v1.lessons')).map(S.normalize).find(x => x.title === 'Cellular respiration'); return S.buildDeck(l).map(c => c.front.trim()); });
+    ok(rows.length === deckN && rows.every(r => r.length === 3), 'one row of Front, Back, Tags per card: ' + rows.length);
+    ok(rows.every((r, i) => r[0] === fronts[i]) && rows.every(r => r[2].split(' ')[0] === 'Scribble' && !/\s{2}/.test(r[2])), 'fronts match Quiz me, tags start with Scribble');
+    ok(rows.some(r => r[1].includes('\n')), 'multi-line answers keep their line breaks');
+    const qt = await page.inputValue('#quizletText');
+    ok(qt.split('\n').length === deckN && qt.split('\n').every(x => x.split('\t').length === 2), 'Quizlet text: one line per card, one tab each');
+    await page.click('#flashHow summary');
+    ok(await page.isVisible('#flashHow >> text=File → Import') && await page.isVisible('#flashHow >> text=New line'), 'import steps for Anki and Quizlet');
+    ok(!(await overflow()), 'flashcards section: no sideways scrolling');
+    await page.locator('#flashExp').scrollIntoViewIfNeeded(); await page.screenshot({ path: OUT + '/export-flashcards.png' });
+    await page.emulateMedia({ colorScheme: 'dark' }); await page.waitForTimeout(100);
+    await page.locator('#flashExp').scrollIntoViewIfNeeded(); await page.screenshot({ path: OUT + '/export-flashcards-dark.png' });
+    ok(!(await overflow()), 'flashcards section in dark mode: no sideways scrolling');
+    await page.emulateMedia({ colorScheme: 'light' });
+    await page.click('[data-act=copyQuizlet]');
+    ok(await page.waitForFunction(() => /Copied \d+ cards|Selected/.test(document.querySelector('.toast')?.textContent || ''), null, { timeout: 3000 }).then(() => true, () => false), 'Copy for Quizlet copies (or selects) the cards');
+    await page.keyboard.press('Escape');
+    const T = await page.evaluate(() => { const S = window.SCRIBBLE, N = x => S.normalize(x);
+      const a = N({ id: 'fa', title: 'Glycolysis, part "one"', course: 'Bio: 101', notes: [
+        { text: 'Why, "really"?', tag: 'q', t: 0 }, { text: 'Where?', tag: 'q', t: 75 }, { text: 'ATP: energy\tcurrency', tag: 'def' },
+        { text: 'Steps', tag: 'section' }, { text: 'one, two', level: 1 }, { text: 'three', level: 1 }] });
+      const b = N({ id: 'fb', title: 'Krebs', course: 'Bio: 101', notes: [{ text: 'NADH = carrier', tag: 'def' }] });
+      const c = { isCourse: true, title: 'Bio: 101', course: 'Bio: 101', lessons: [a, b] };
+      return { cards: S.flashCards(a), csv: S.ankiCSV(a), ql: S.quizletText(a), ccsv: S.ankiCSV(c), cN: S.flashCards(c).length, aN: S.buildDeck(a).length, bN: S.buildDeck(b).length, empty: S.ankiCSV(N({ id: 'fe', title: 'E', notes: [] })) }; });
+    ok(T.cards[0].back === 'Answer from memory, then check your notes.' && T.cards[1].back === 'Answer from memory, then check the video at 01:15.', 'a question without an answer: no 00:00 time on its card, real times kept');
+    const tr = parseCSV(T.csv.split('\n').filter(x => !x.startsWith('#')).join('\n'));
+    ok(tr[0][0] === 'Why, "really"?' && tr.find(r => r[0] === 'Define: ATP')?.[1] === 'energy\tcurrency' && tr.some(r => r[1] === '• one, two\n• three'), 'commas, quotes, tabs and line breaks survive the CSV');
+    ok(/^#deck:Scribble::Bio 101$/m.test(T.csv) && tr[0][2] === 'Scribble Bio_101 Glycolysis_part_one', 'deck from the course (colons removed) and safe tags: ' + tr[0][2]);
+    ok(T.ql.split('\n').every(x => x.split('\t').length === 2) && T.ql.includes('Define: ATP\tenergy currency') && T.ql.includes('• one, two • three'), 'Quizlet text flattens tabs and line breaks inside a card');
+    const cr = parseCSV(T.ccsv.split('\n').filter(x => !x.startsWith('#')).join('\n'));
+    ok(T.cN === T.aN + T.bN && cr.length === T.cN && /^#deck:Scribble::Bio 101$/m.test(T.ccsv) && cr[cr.length - 1][2] === 'Scribble Bio_101 Krebs', 'whole course: every lesson\'s cards, tagged by lesson');
+    ok(T.empty.split('\n').filter(x => x && !x.startsWith('#')).length === 0, 'a lesson with no cards gives headers only');
+    await page.click('[data-tab=quiz]');
+    await page.click('[data-act=export][data-to=flash]');
+    ok(await page.isVisible('#exportPanel') && await page.locator('#flashExp').isVisible() && await page.evaluate(() => { const r = document.querySelector('#flashExp').getBoundingClientRect(); return r.top < innerHeight && r.bottom > 0; }), 'Quiz me → Use in Anki or Quizlet opens Export at the flashcards');
+    await page.keyboard.press('Escape');
+    ok(await page.evaluate(() => localStorage.getItem('scribble.v1.lessons')) === savedBefore, 'flashcard export changes no saved lesson'); }
   const enc = await page.evaluate(() => [window.SCRIBBLE.toWin('“Café” — ★ → μ 🧠'), window.SCRIBBLE.crc32(new TextEncoder().encode('123456789'))]);
   ok(enc[0] === '\x93Café\x94 \x97 * -> \xB5 ?' && enc[1] === 0xCBF43926, 'PDF text encoding and zip checksum are correct: ' + JSON.stringify(enc[0]));
 
